@@ -28,6 +28,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     let settingsStore = SettingsStore()
     private let triage = TriageCoordinator()
     private let updateChecker = UpdateChecker()
+    private var mailKitTrigger: TriageTrigger?
 
     // MARK: - Icon state machine (envelope family)
 
@@ -56,6 +57,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         bindTriage()
         refreshTriageMenuState()
         schedulePoll()
+
+        // Fast path: MailKit signals from the PostmarkMail appex (when enabled).
+        // The 15-minute poll above stays the backstop.
+        let trigger = TriageTrigger(coordinator: triage)
+        trigger.start()
+        mailKitTrigger = trigger
 
         Task {
             await Notifier.shared.requestAuthorizationIfNeeded()

@@ -11,29 +11,19 @@
 /* End PBXFileReference section */
 
 /* Begin PBXFileSystemSynchronizedBuildFileExceptionSet section */
-		AA0000000000000000000006 /* Exceptions for "Postmark" folder */ = {
+		AA0000000000000000000006 /* PBXFileSystemSynchronizedBuildFileExceptionSet */ = {
 			isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
 			membershipExceptions = (
-				"App/Info.plist",
-				"Entitlements/Postmark.entitlements",
+				App/Info.plist,
+				Entitlements/Postmark.entitlements,
+				MailExtension/PostmarkMailExtension.swift,
 			);
 			target = AA0000000000000000000007 /* Postmark */;
 		};
 /* End PBXFileSystemSynchronizedBuildFileExceptionSet section */
 
 /* Begin PBXFileSystemSynchronizedRootGroup section */
-		AA0000000000000000000005 /* Postmark */ = {
-			isa = PBXFileSystemSynchronizedRootGroup;
-			exceptions = (
-				AA0000000000000000000006 /* Exceptions for "Postmark" folder */,
-			);
-			explicitFileTypes = {
-			};
-			explicitFolders = (
-			);
-			path = Postmark;
-			sourceTree = "<group>";
-		};
+		AA0000000000000000000005 /* Postmark */ = {isa = PBXFileSystemSynchronizedRootGroup; exceptions = (AA0000000000000000000006 /* PBXFileSystemSynchronizedBuildFileExceptionSet */, ); explicitFileTypes = {}; explicitFolders = (); path = Postmark; sourceTree = "<group>"; };
 /* End PBXFileSystemSynchronizedRootGroup section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -103,6 +93,7 @@
 				};
 			};
 			buildConfigurationList = AA000000000000000000000B /* Build configuration list for PBXProject "Postmark" */;
+			compatibilityVersion = "Xcode 16.0.Superseded.1";
 			developmentRegion = en;
 			hasScannedForEncodings = 0;
 			knownRegions = (
@@ -111,7 +102,6 @@
 			);
 			mainGroup = AA0000000000000000000002;
 			minimizedProjectReferenceProxies = 1;
-			preferredProjectObjectVersion = 70;
 			productRefGroup = AA0000000000000000000003 /* Products */;
 			projectDirPath = "";
 			projectRoot = "";
@@ -210,14 +200,14 @@
 				CURRENT_PROJECT_VERSION = 1;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = Postmark/App/Info.plist;
-				INFOPLIST_KEY_CFBundleDisplayName = "Postmark";
+				INFOPLIST_KEY_CFBundleDisplayName = Postmark;
 				INFOPLIST_KEY_NSPrincipalClass = NSApplication;
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
 					"@executable_path/../Frameworks",
 				);
 				MARKETING_VERSION = 0.2.0;
-				PRODUCT_BUNDLE_IDENTIFIER = digital.colson.postmark;
+				PRODUCT_BUNDLE_IDENTIFIER = ltd.colson.postmark;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SWIFT_EMIT_LOC_STRINGS = YES;
 			};
@@ -234,14 +224,14 @@
 				CURRENT_PROJECT_VERSION = 1;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = Postmark/App/Info.plist;
-				INFOPLIST_KEY_CFBundleDisplayName = "Postmark";
+				INFOPLIST_KEY_CFBundleDisplayName = Postmark;
 				INFOPLIST_KEY_NSPrincipalClass = NSApplication;
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
 					"@executable_path/../Frameworks",
 				);
 				MARKETING_VERSION = 0.2.0;
-				PRODUCT_BUNDLE_IDENTIFIER = digital.colson.postmark;
+				PRODUCT_BUNDLE_IDENTIFIER = ltd.colson.postmark;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SWIFT_EMIT_LOC_STRINGS = YES;
 			};
