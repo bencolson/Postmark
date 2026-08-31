@@ -6,12 +6,14 @@ enum MailScripts {
     private static let fsString: String = String(Character(UnicodeScalar(UInt8(31))))
     private static let rsString: String = String(Character(UnicodeScalar(UInt8(30))))
 
-    /// List unread inbox messages received within the last `daysWindow` days.
+    /// List inbox messages received within the last `daysWindow` days. When
+    /// `unreadOnly` is true (default), read messages are excluded.
     /// Returns records delimited by char(30); fields by char(31), in this order:
     /// messageID, sender, subject, unixEpoch, mailbox, attachments("name=size;...")
     /// No body is fetched here — `messageBody(id:)` does that lazily.
-    static func listUnreadInbox(daysWindow: Int) -> String {
-        """
+    static func listInbox(daysWindow: Int, unreadOnly: Bool = true) -> String {
+        let readFilter = unreadOnly ? "read status = false and " : ""
+        return """
         set fs to character id 31
         set rs to character id 30
         set cutoff to (current date) - (\(daysWindow) * 86400)
@@ -19,7 +21,7 @@ enum MailScripts {
         tell application "Mail"
             set msgs to {}
             try
-                set msgs to (every message of inbox whose read status = false and date received >= cutoff)
+                set msgs to (every message of inbox whose \(readFilter)date received >= cutoff)
             end try
             repeat with i from 1 to length of msgs
                 set m to item i of msgs

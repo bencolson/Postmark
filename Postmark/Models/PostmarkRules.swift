@@ -15,6 +15,12 @@ struct PollingConfig: Codable {
     var daysWindow: Int
     var enabled: Bool
     var quietHours: QuietHours?
+
+    /// When true, triage considers read messages too (default: unread only).
+    /// Optional so pre-existing rule files without the key still decode.
+    var includeRead: Bool? = nil
+
+    var includeReadOrDefault: Bool { includeRead ?? false }
 }
 
 struct QuietHours: Codable {

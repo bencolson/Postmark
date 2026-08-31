@@ -58,7 +58,7 @@ final class TriageCoordinator {
 
         let messages: [MailMessage]
         do {
-            messages = try await poller.poll(daysWindow: rules.polling.daysWindow)
+            messages = try await poller.poll(daysWindow: rules.polling.daysWindow, unreadOnly: !rules.polling.includeReadOrDefault)
         } catch {
             ActivityLog.shared.record("Poll failed: \(error.localizedDescription)", kind: .poll, level: .error)
             onFatalError?(error.localizedDescription)

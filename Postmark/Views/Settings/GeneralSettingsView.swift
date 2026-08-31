@@ -7,6 +7,7 @@ struct GeneralSettingsView: View {
 
     @State private var intervalMinutes: Int = 15
     @State private var daysWindow: Int = 7
+    @State private var includeRead: Bool = false
     @State private var quietStart: String = "22:00"
     @State private var quietEnd: String = "08:00"
     @State private var saveState: SaveState = .idle
@@ -37,6 +38,8 @@ struct GeneralSettingsView: View {
             Section("Polling") {
                 Stepper("Poll every \(intervalMinutes) minutes", value: $intervalMinutes, in: 1...120)
                 Stepper("Window: last \(daysWindow) days", value: $daysWindow, in: 1...30)
+                Toggle("Include already-read messages", isOn: $includeRead)
+                    .toggleStyle(.switch)
                 LabeledContent("Quiet hours window") {
                     HStack(spacing: 6) {
                         TextField("22:00", text: $quietStart)
@@ -84,6 +87,7 @@ struct GeneralSettingsView: View {
         if let rules = RulesStore.shared.load() {
             intervalMinutes = rules.polling.intervalMinutes
             daysWindow = rules.polling.daysWindow
+            includeRead = rules.polling.includeReadOrDefault
             if let qh = rules.polling.quietHours {
                 quietStart = qh.start
                 quietEnd = qh.end
@@ -99,6 +103,7 @@ struct GeneralSettingsView: View {
         }
         rules.polling.intervalMinutes = intervalMinutes
         rules.polling.daysWindow = daysWindow
+        rules.polling.includeRead = includeRead
         rules.polling.quietHours = QuietHours(start: quietStart, end: quietEnd)
         do {
             try RulesStore.shared.save(rules: rules)

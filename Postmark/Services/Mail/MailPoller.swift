@@ -7,17 +7,17 @@ final class MailPoller {
     private let fsString = String(Character(UnicodeScalar(UInt8(31))))
     private let rsString = String(Character(UnicodeScalar(UInt8(30))))
 
-    func poll(daysWindow: Int) async throws -> [MailMessage] {
-        await ActivityLog.shared.record("Polling inbox (window \(daysWindow)d)", kind: .poll, level: .debug)
+    func poll(daysWindow: Int, unreadOnly: Bool = true) async throws -> [MailMessage] {
+        await ActivityLog.shared.record("Polling inbox (window \(daysWindow)d, \(unreadOnly ? "unread only" : "all messages")", kind: .poll, level: .debug)
         // Surface the real error (e.g. a denied Automation permission) rather
         // than collapsing it into "Mail is not running".
         let check = try await MailBridge.executeAppleScript(MailScripts.checkMailRunning, timeout: 10)
         guard check.trimmingCharacters(in: .whitespacesAndNewlines).lowercased() == "true" else {
             throw MailBridgeError.mailNotRunning
         }
-        let raw = try await MailBridge.executeAppleScript(MailScripts.listUnreadInbox(daysWindow: daysWindow))
+        let raw = try await MailBridge.executeAppleScript(MailScripts.listInbox(daysWindow: daysWindow, unreadOnly: unreadOnly))
         let messages = parse(raw)
-        await ActivityLog.shared.record("Polled \(messages.count) unread message\(messages.count == 1 ? "" : "s")", kind: .poll)
+        await ActivityLog.shared.record("Polled \(messages.count) message\(messages.count == 1 ? "" : "s")", kind: .poll)
         return messages
     }
 

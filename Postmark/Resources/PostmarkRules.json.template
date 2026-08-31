@@ -6,7 +6,11 @@
     "intervalMinutes": 15,
     "daysWindow": 7,
     "enabled": false,
-    "quietHours": { "start": "22:00", "end": "08:00" }
+    "quietHours": {
+      "start": "22:00",
+      "end": "08:00"
+    },
+    "includeRead": false
   },
   "provider": {
     "type": "litellm",
@@ -29,26 +33,44 @@
     {
       "id": "receipt",
       "label": "Receipts",
-      "action": { "move": "Receipts & Bookkeeping", "markRead": true }
+      "action": {
+        "move": "Receipts & Bookkeeping",
+        "markRead": true
+      }
     },
     {
       "id": "low-priority",
       "label": "Low Priority",
-      "action": { "move": "Low Priority" }
+      "action": {
+        "move": "Low Priority"
+      }
     },
     {
       "id": "other",
       "label": "Other",
-      "action": { "leave": true }
+      "action": {
+        "leave": true
+      }
     }
   ],
-  "fallback": { "action": { "leave": true } },
+  "fallback": {
+    "action": {
+      "leave": true
+    }
+  },
   "attachment": {
     "prompt": "You are filing production-day paperwork for a freelance camera operator/DIT. Given an email's subject/sender/body and a list of attachment filenames (with text excerpts where available), classify EACH attachment into exactly one of these categories, and extract the date it actually relates to (e.g. the shoot day the document covers) — NOT the date the email arrived.\n\nCategories:\n- Call Sheets\n- Movement Orders\n- Risk Assessments\n- Storyboards\n- Treatments\n- Specs (technical delivery / transcode / offline-edit specs for a shoot's deliverables)\n- Other (ONLY if you are confident it is shoot-day production logistics tied to a specific job, e.g. location maps/directions, shot lists, shoot schedules — but doesn't fit the categories above)\n- skip (the DEFAULT — use this unless you are confident the attachment is genuinely one of the categories above)\n\nUse \"skip\" for: invoices, quotations/quotes for kit, equipment or services, payroll/payslips/tax/HMRC forms, screenshots, personal photos, email signature images or logos, marketing material, newsletters, calendar invites, or anything you are not confident about. When in doubt, skip — false negatives are fine, false positives are not.\n\nFor the date: look at the filename, the text excerpt, and the email body for an explicit date (e.g. \"Shoot Day 4 - 10 July 2026\", \"MOVEMENT ORDER 08TH JULY\"). Resolve relative phrases (\"tomorrow\", \"for tomorrow\") against the email's received date, given below. If a document covers multiple days, use the FIRST day it covers. If you cannot determine a date with reasonable confidence, omit the date field (or set it to null) — do not guess.\n\nEmail received date: {{receivedDate}}\nEmail subject: {{subject}}\nFrom: {{fromName}} <{{fromEmail}}>\nEmail body (excerpt): {{bodyExcerpt}}\n\nAttachments:\n{{attachments}}\n\nReply with ONLY a JSON array, no markdown, no explanation, in this exact format:\n[{\"filename\": \"...\", \"category\": \"...\", \"date\": \"YYYY-MM-DD\"}]",
     "forward": {
       "to": "REPLACE_WITH_YOUR_Silo_INBOUND_ADDRESS",
       "devTo": "REPLACE_WITH_YOUR_Silo_DEV_INBOUND_ADDRESS",
-      "onlyTypes": ["Call Sheets", "Movement Orders", "Risk Assessments", "Storyboards", "Treatments", "Specs"]
+      "onlyTypes": [
+        "Call Sheets",
+        "Movement Orders",
+        "Risk Assessments",
+        "Storyboards",
+        "Treatments",
+        "Specs"
+      ]
     }
   }
 }
