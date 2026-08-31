@@ -37,6 +37,9 @@ enum AIClientFactory {
                     kind: .error,
                     level: .error
                 )
+                // Fail the run fast with a clear reason instead of the proxy's
+                // opaque 'No connected db' 400 (empty key → anonymous → DB lookup).
+                throw AIClientError.missingAPIKey("LiteLLM")
             }
             return OpenAIClient(baseURL: spec.resolvedBaseURL.isEmpty ? "http://localhost:4000/v1" : spec.resolvedBaseURL,
                                 apiKey: key, model: spec.model, provider: .litellm)
