@@ -42,6 +42,10 @@ build: render-icon
 		ENABLE_DEBUG_DYLIB=NO \
 		build
 	@cp "$(BUILD_DIR)/DerivedData/Build/Products/Debug/$(BUNDLE_NAME).app/Contents/MacOS/$(BUNDLE_NAME)" "$(EXECUTABLE)"
+	@if [ -d "$(BUILD_DIR)/DerivedData/Build/Products/Debug/$(BUNDLE_NAME).app/Contents/PlugIns" ]; then \
+		mkdir -p "$(APP_BUNDLE)/Contents/PlugIns" && \
+		cp -R "$(BUILD_DIR)/DerivedData/Build/Products/Debug/$(BUNDLE_NAME).app/Contents/PlugIns/." "$(APP_BUNDLE)/Contents/PlugIns/"; \
+	fi
 	@codesign --force --sign - \
 		--entitlements Postmark/Entitlements/Postmark.entitlements \
 		"$(EXECUTABLE)"
@@ -71,6 +75,10 @@ release: render-icon
 		ONLY_ACTIVE_ARCH=NO \
 		build
 	@cp "$(BUILD_DIR)/DerivedData/Build/Products/Release/$(BUNDLE_NAME).app/Contents/MacOS/$(BUNDLE_NAME)" "$(EXECUTABLE)"
+	@if [ -d "$(BUILD_DIR)/DerivedData/Build/Products/Release/$(BUNDLE_NAME).app/Contents/PlugIns" ]; then \
+		mkdir -p "$(APP_BUNDLE)/Contents/PlugIns" && \
+		cp -R "$(BUILD_DIR)/DerivedData/Build/Products/Release/$(BUNDLE_NAME).app/Contents/PlugIns/." "$(APP_BUNDLE)/Contents/PlugIns/"; \
+	fi
 	@codesign --force --sign - \
 		--entitlements Postmark/Entitlements/Postmark.entitlements \
 		"$(EXECUTABLE)"

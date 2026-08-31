@@ -30,14 +30,20 @@ final class TriageTrigger {
             forName: Self.dncName,
             object: nil,
             queue: .main
-        ) { [weak self] _ in
+        ) { [weak self] notification in
             Task { @MainActor [weak self] in
-                self?.nudge()
+                let ids = (notification.userInfo?["messageID"] as? String)
+                    .flatMap { $0.isEmpty ? nil : [$0] } ?? []
+                self?.nudge(liveMessageIDs: ids)
             }
         }
         // Catch-up: drain anything the appex queued while the daemon was not
-        // running (extension enabled but app quit, for example).
-        nudge(initial: true)
+        // running (extension enabled but app quit, for example). Silent when
+        // there is nothing queued.
+        let pending = drain()
+        if !pending.isEmpty {
+            nudge(liveMessageIDs: pending)
+        }
     }
 
     func stop() {
@@ -51,10 +57,9 @@ final class TriageTrigger {
 
     // MARK: - Signal handling
 
-    private func nudge(initial: Bool = false) {
-        let ids = drain()
+    private func nudge(liveMessageIDs: [String] = []) {
+        let ids = drain() + liveMessageIDs
         if ids.isEmpty {
-            if initial { return }
             ActivityLog.shared.record("MailKit signal (no message ID)", kind: .app, level: .debug)
         } else {
             for id in ids {
@@ -64,15 +69,37 @@ final class TriageTrigger {
         scheduleRun()
     }
 
-    /// Removes and returns the queued message IDs (oldest already dropped at the
-    /// appex side beyond 50).
+    /// Removes and returns the queued message IDs. The app is not sandboxed, so
+    /// its own `UserDefaults(suiteName:)` domain cannot see the sandboxed
+    /// appex's App Group suite — the appex writes into the group container, so
+    /// drain that file directly (the path is deterministic). Also drain the
+    /// plain-suite domain in case a sandboxed app build ever ships.
     private func drain() -> [String] {
-        guard let defaults = UserDefaults(suiteName: Self.suiteName) else { return [] }
-        let ids = defaults.stringArray(forKey: Self.newMailIDsKey) ?? []
-        if !ids.isEmpty {
-            defaults.removeObject(forKey: Self.newMailIDsKey)
+        var ids: [String] = []
+
+        let groupContainer = FileManager.default.homeDirectoryForCurrentUser
+            .appendingPathComponent("Library/Group Containers/\(Self.suiteName)")
+            .appendingPathComponent("Library/Preferences/\(Self.suiteName).plist")
+        if let data = try? Data(contentsOf: groupContainer),
+           let plist = try? PropertyListSerialization.propertyList(
+               from: data,
+               options: [],
+               format: nil
+           ) as? [String: Any],
+           let suiteIDs = plist[Self.newMailIDsKey] as? [String] {
+            ids.append(contentsOf: suiteIDs)
+            try? FileManager.default.removeItem(at: groupContainer)
         }
-        return ids
+
+        if let defaults = UserDefaults(suiteName: Self.suiteName) {
+            let suiteIDs = defaults.stringArray(forKey: Self.newMailIDsKey) ?? []
+            if !suiteIDs.isEmpty {
+                ids.append(contentsOf: suiteIDs)
+                defaults.removeObject(forKey: Self.newMailIDsKey)
+            }
+        }
+
+        return Array(NSOrderedSet(array: ids)).compactMap { $0 as? String }
     }
 
     private func scheduleRun() {
