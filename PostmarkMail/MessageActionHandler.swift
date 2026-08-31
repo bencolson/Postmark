@@ -8,17 +8,14 @@
 import Foundation
 import MailKit
 
-/// Reads `message-id`, then signals the Postmark daemon two ways:
-/// 1. A DistributedNotificationCenter poke with the message ID in `userInfo`
-///    (instant; the daemon observes it directly).
-/// 2. An App Group message-ID ring for durability/catch-up; the daemon drains
-///    the group container's preferences plist at a deterministic path.
-/// Always no-ops the MailKit decision — this extension never performs a real
-/// Mail action.
+/// Reads `message-id`, then signals the Postmark daemon with a
+/// DistributedNotificationCenter poke carrying the ID in `userInfo` (the
+/// daemon's `TriageTrigger` observes it and runs a rate-limited poll). Always
+/// no-ops the MailKit decision — this extension never performs a real Mail
+/// action. If the poke is dropped, the daemon's own poll (a scheduled shadow
+/// or live poll) is the backstop.
 class MessageActionHandler: NSObject, MEMessageActionHandler {
 
-    static let suiteName = "group.ltd.colson.postmark"
-    static let newMailIDsKey = "PostmarkNewMailIDs"
     static let dncName = "PostmarkMailKitNewMail"
 
     var requiredHeaders: [String] {
@@ -34,7 +31,6 @@ class MessageActionHandler: NSObject, MEMessageActionHandler {
         // downloaded; a missing message-id still produces a generic nudge so
         // the daemon's "poll soon" path fires.
         let mid = lookupMessageID(in: message.headers) ?? ""
-        enqueue(mid)
 
         DistributedNotificationCenter.default().post(
             name: Notification.Name(Self.dncName),
@@ -54,19 +50,5 @@ class MessageActionHandler: NSObject, MEMessageActionHandler {
             return values.first
         }
         return nil
-    }
-
-    /// Bounded ring of seen message IDs shared with the main app via the App
-    /// Group suite; oldest are dropped beyond 50.
-    private func enqueue(_ messageID: String) {
-        guard let defaults = UserDefaults(suiteName: Self.suiteName) else { return }
-        var ids = defaults.stringArray(forKey: Self.newMailIDsKey) ?? []
-        if !messageID.isEmpty {
-            ids.append(messageID)
-        }
-        if ids.count > 50 {
-            ids.removeFirst(ids.count - 50)
-        }
-        defaults.set(ids, forKey: Self.newMailIDsKey)
     }
 }

@@ -1,14 +1,12 @@
 import Foundation
 
-/// MailKit fast path: the `PostmarkMail` appex signals new mail via a
-/// DistributedNotificationCenter poke plus an App Group message-ID ring. This
-/// observer converts that into an earlier, debounced, rate-limited triage run.
-/// The 15-minute poll remains the source of truth and the backstop for dropped
-/// signals, a closed Mail, a disabled extension, or a suite-write race.
+/// MailKit fast path: the `PostmarkMail` appex pokes a DistributedNotification
+/// Center notification carrying the message ID in `userInfo`. This observer
+/// converts that into an earlier, debounced, rate-limited triage run. The
+/// poll (live or shadow, on the rules schedule) is the source of truth and
+/// the backstop for dropped signals, a closed Mail, or a disabled extension.
 @MainActor
 final class TriageTrigger {
-    static let suiteName = "group.ltd.colson.postmark"
-    static let newMailIDsKey = "PostmarkNewMailIDs"
     static let dncName = Notification.Name("PostmarkMailKitNewMail")
 
     private let coordinator: TriageCoordinator
@@ -32,17 +30,9 @@ final class TriageTrigger {
             queue: .main
         ) { [weak self] notification in
             Task { @MainActor [weak self] in
-                let ids = (notification.userInfo?["messageID"] as? String)
-                    .flatMap { $0.isEmpty ? nil : [$0] } ?? []
-                self?.nudge(liveMessageIDs: ids)
+                let id = (notification.userInfo?["messageID"] as? String) ?? ""
+                self?.nudge(messageID: id)
             }
-        }
-        // Catch-up: drain anything the appex queued while the daemon was not
-        // running (extension enabled but app quit, for example). Silent when
-        // there is nothing queued.
-        let pending = drain()
-        if !pending.isEmpty {
-            nudge(liveMessageIDs: pending)
         }
     }
 
@@ -57,49 +47,13 @@ final class TriageTrigger {
 
     // MARK: - Signal handling
 
-    private func nudge(liveMessageIDs: [String] = []) {
-        let ids = drain() + liveMessageIDs
-        if ids.isEmpty {
+    private func nudge(messageID: String) {
+        if messageID.isEmpty {
             ActivityLog.shared.record("MailKit signal (no message ID)", kind: .app, level: .debug)
         } else {
-            for id in ids {
-                ActivityLog.shared.record("Trigger: MailKit signal (\(id))", kind: .app, level: .debug)
-            }
+            ActivityLog.shared.record("Trigger: MailKit signal (\(messageID))", kind: .app, level: .debug)
         }
         scheduleRun()
-    }
-
-    /// Removes and returns the queued message IDs. The app is not sandboxed, so
-    /// its own `UserDefaults(suiteName:)` domain cannot see the sandboxed
-    /// appex's App Group suite — the appex writes into the group container, so
-    /// drain that file directly (the path is deterministic). Also drain the
-    /// plain-suite domain in case a sandboxed app build ever ships.
-    private func drain() -> [String] {
-        var ids: [String] = []
-
-        let groupContainer = FileManager.default.homeDirectoryForCurrentUser
-            .appendingPathComponent("Library/Group Containers/\(Self.suiteName)")
-            .appendingPathComponent("Library/Preferences/\(Self.suiteName).plist")
-        if let data = try? Data(contentsOf: groupContainer),
-           let plist = try? PropertyListSerialization.propertyList(
-               from: data,
-               options: [],
-               format: nil
-           ) as? [String: Any],
-           let suiteIDs = plist[Self.newMailIDsKey] as? [String] {
-            ids.append(contentsOf: suiteIDs)
-            try? FileManager.default.removeItem(at: groupContainer)
-        }
-
-        if let defaults = UserDefaults(suiteName: Self.suiteName) {
-            let suiteIDs = defaults.stringArray(forKey: Self.newMailIDsKey) ?? []
-            if !suiteIDs.isEmpty {
-                ids.append(contentsOf: suiteIDs)
-                defaults.removeObject(forKey: Self.newMailIDsKey)
-            }
-        }
-
-        return Array(NSOrderedSet(array: ids)).compactMap { $0 as? String }
     }
 
     private func scheduleRun() {

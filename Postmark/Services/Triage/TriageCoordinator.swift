@@ -33,9 +33,9 @@ final class TriageCoordinator {
         }
         Notifier.shared.setQuietHours(rules.polling.quietHours)
 
-        if scheduled && !rules.polling.enabled {
-            return // disabled; only "Triage Now" runs (shadow mode)
-        }
+        // Scheduled runs always execute: live when triage is enabled, shadow
+        // (classify + log, no Mail actions) when it is not. This keeps the
+        // shadow-mode parity loop observable on a schedule.
         let actingEnabled = rules.polling.enabled
         ActivityLog.shared.record(
             "Run started — \(scheduled ? "scheduled" : "manual"), \(actingEnabled ? "live" : "shadow") mode, provider \(rules.provider.type)/\(rules.provider.model)",
@@ -200,7 +200,12 @@ final class TriageCoordinator {
             errors: errors,
             results: results
         )
-        Notifier.shared.postDigest(run)
+        // Only notify for live runs and manual Triage Now. A scheduled shadow
+        // poll (e.g. every minute during parity validation) must stay quiet —
+        // the activity window is its record, not notifications.
+        if actingEnabled || !scheduled {
+            Notifier.shared.postDigest(run)
+        }
         onRun?(run)
     }
 }

@@ -64,7 +64,7 @@ enum MailScripts {
                 on error
                     set atts to ""
                 end try
-                set out to out & sanitize(mid) & fs & sanitize(sm) & fs & sanitize(subj) & fs & ep & fs & sanitize(mb) & fs & atts & rs
+                set out to out & my sanitize(mid) & fs & my sanitize(sm) & fs & my sanitize(subj) & fs & ep & fs & my sanitize(mb) & fs & atts & rs
             end repeat
         end tell
         return out

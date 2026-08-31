@@ -40,11 +40,15 @@ build: render-icon
 		-destination 'platform=macOS' \
 		-derivedDataPath $(BUILD_DIR)/DerivedData \
 		ENABLE_DEBUG_DYLIB=NO \
+		CODE_SIGNING_ALLOWED=NO \
 		build
 	@cp "$(BUILD_DIR)/DerivedData/Build/Products/Debug/$(BUNDLE_NAME).app/Contents/MacOS/$(BUNDLE_NAME)" "$(EXECUTABLE)"
 	@if [ -d "$(BUILD_DIR)/DerivedData/Build/Products/Debug/$(BUNDLE_NAME).app/Contents/PlugIns" ]; then \
 		mkdir -p "$(APP_BUNDLE)/Contents/PlugIns" && \
 		cp -R "$(BUILD_DIR)/DerivedData/Build/Products/Debug/$(BUNDLE_NAME).app/Contents/PlugIns/." "$(APP_BUNDLE)/Contents/PlugIns/"; \
+		codesign --force --sign - \
+			--entitlements PostmarkMail/PostmarkMail.entitlements \
+			"$(APP_BUNDLE)/Contents/PlugIns/PostmarkMail.appex"; \
 	fi
 	@codesign --force --sign - \
 		--entitlements Postmark/Entitlements/Postmark.entitlements \
@@ -73,11 +77,15 @@ release: render-icon
 		-derivedDataPath $(BUILD_DIR)/DerivedData \
 		ARCHS="arm64 x86_64" \
 		ONLY_ACTIVE_ARCH=NO \
+		CODE_SIGNING_ALLOWED=NO \
 		build
 	@cp "$(BUILD_DIR)/DerivedData/Build/Products/Release/$(BUNDLE_NAME).app/Contents/MacOS/$(BUNDLE_NAME)" "$(EXECUTABLE)"
 	@if [ -d "$(BUILD_DIR)/DerivedData/Build/Products/Release/$(BUNDLE_NAME).app/Contents/PlugIns" ]; then \
 		mkdir -p "$(APP_BUNDLE)/Contents/PlugIns" && \
 		cp -R "$(BUILD_DIR)/DerivedData/Build/Products/Release/$(BUNDLE_NAME).app/Contents/PlugIns/." "$(APP_BUNDLE)/Contents/PlugIns/"; \
+		codesign --force --sign - \
+			--entitlements PostmarkMail/PostmarkMail.entitlements \
+			"$(APP_BUNDLE)/Contents/PlugIns/PostmarkMail.appex"; \
 	fi
 	@codesign --force --sign - \
 		--entitlements Postmark/Entitlements/Postmark.entitlements \
