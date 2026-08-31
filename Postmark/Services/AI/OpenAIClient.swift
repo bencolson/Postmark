@@ -20,7 +20,10 @@ final class OpenAIClient: AIClient {
         AsyncThrowingStream { continuation in
             let task = Task {
                 do {
-                    guard let url = URL(string: "\(self.baseURL)/v1/chat/completions") else {
+                    // Tolerate base URLs with or without a trailing `/v1`
+                    // (e.g. "http://localhost:4000" vs "http://host:4000/v1").
+                    let normalizedBase = baseURL.hasSuffix("/v1") ? baseURL : "\(baseURL)/v1"
+                    guard let url = URL(string: "\(normalizedBase)/chat/completions") else {
                         throw AIClientError.requestFailed("Invalid base URL: \(self.baseURL)")
                     }
                     var request = URLRequest(url: url)
