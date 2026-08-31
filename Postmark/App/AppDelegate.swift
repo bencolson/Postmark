@@ -10,6 +10,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private var statusItem: NSStatusItem!
     private var statusMenu: NSMenu!
     private var settingsWindow: NSWindow?
+    private var activityWindow: NSWindow?
 
     private var triageNowItem: NSMenuItem!
     private var enableTriageItem: NSMenuItem!
@@ -48,6 +49,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     func applicationDidFinishLaunching(_ notification: Notification) {
         NSApp.windows.forEach { $0.close() }
 
+        ActivityLog.shared.record("Postmark launched", kind: .app)
         setupMenuBar()
         observeUpdateState()
         observeTriageSettingChanges()
@@ -94,6 +96,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         statusMenu.addItem(quietHoursItem)
         statusMenu.addItem(NSMenuItem.separator())
         statusMenu.addItem(NSMenuItem(title: "Settings…", action: #selector(openSettings), keyEquivalent: ","))
+        let activityItem = NSMenuItem(title: "Activity…", action: #selector(openActivity), keyEquivalent: "a")
+        activityItem.keyEquivalentModifierMask = [.command, .shift]
+        statusMenu.addItem(activityItem)
         statusMenu.addItem(NSMenuItem.separator())
         statusMenu.addItem(NSMenuItem(title: "Quit Postmark", action: #selector(NSApplication.terminate(_:)), keyEquivalent: "q"))
 
@@ -122,6 +127,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     // MARK: - Menu actions
 
     @objc private func triageNow() {
+        ActivityLog.shared.record("Triage Now (manual)", kind: .app)
         isBusy = true
         refreshIcon()
         Task {
@@ -135,7 +141,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         let enabled = !settingsStore.triageEnabled
         do {
             try settingsStore.setTriageEnabled(enabled)
+            ActivityLog.shared.record("Triage \(enabled ? "enabled" : "disabled")", kind: .app)
         } catch {
+            ActivityLog.shared.record("Could not update rules file: \(error.localizedDescription)", kind: .error, level: .error)
             Notifier.shared.postErrors(["Could not update rules file: \(error.localizedDescription)"])
         }
         refreshTriageMenuState()
@@ -145,6 +153,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         settingsStore.quietHoursEnabled.toggle()
         Notifier.shared.forceQuiet = settingsStore.quietHoursEnabled
         quietHoursItem.state = settingsStore.quietHoursEnabled ? .on : .off
+        ActivityLog.shared.record("Quiet hours \(settingsStore.quietHoursEnabled ? "on" : "off")", kind: .app)
     }
 
     @objc private func installUpdate() {
@@ -163,7 +172,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         triage.onFatalError = { [weak self] message in
             self?.hadErrors = true
             self?.refreshIcon()
-            Task { await Notifier.shared.postErrors([message]) }
+            Task { @MainActor in Notifier.shared.postErrors([message]) }
         }
     }
 
@@ -248,15 +257,16 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         pollTimer?.invalidate()
         let interval = TimeInterval(max(settingsStore.pollingIntervalMinutes, 1) * 60)
         let timer = Timer.scheduledTimer(withTimeInterval: interval, repeats: true) { [weak self] _ in
-            guard let self else { return }
-            self.isBusy = true
-            self.refreshIcon()
-            Task {
+            Task { @MainActor in
+                guard let self else { return }
+                self.isBusy = true
+                self.refreshIcon()
                 await self.triage.run(scheduled: true)
                 self.isBusy = false
                 self.refreshIcon()
             }
         }
+        ActivityLog.shared.record("Scheduled triage fired", kind: .app, level: .debug)
         RunLoop.main.add(timer, forMode: .common)
         pollTimer = timer
     }
@@ -275,7 +285,29 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                 }
                 self?.updateMenuItem.isHidden = !isReady
                 self?.updateSeparator.isHidden = !isReady
+
+                Task { @MainActor in
+                    guard let self else { return }
+                    switch state {
+                    case .downloading:
+                        self.recordUpdateState("Downloading update")
+                    case .readyToInstall:
+                        if let version = self.updateChecker.latestVersion {
+                            self.recordUpdateState("Update v\(version) ready to install")
+                        }
+                    case .failed(let message):
+                        self.recordUpdateState("Update failed: \(message)", level: .error)
+                    case .installing:
+                        self.recordUpdateState("Installing update")
+                    case .idle, .checking, .upToDate:
+                        break
+                    }
+                }
             }
+    }
+
+    private func recordUpdateState(_ message: String, level: ActivityLog.Level = .info) {
+        ActivityLog.shared.record("Update: \(message)", kind: .app, level: level)
     }
 
     // MARK: - Settings window
@@ -303,8 +335,58 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         window.center()
         window.contentMinSize = NSSize(width: 560, height: 520)
         window.isReleasedWhenClosed = false
+        window.delegate = self
         window.makeKeyAndOrderFront(nil)
         NSApp.activate(ignoringOtherApps: true)
         settingsWindow = window
+        ActivityLog.shared.record("Settings window opened", kind: .app, level: .debug)
+    }
+
+    // MARK: - Activity window
+
+    @objc private func openActivity() {
+        if let window = activityWindow {
+            if window.isMiniaturized { window.deminiaturize(nil) }
+            window.makeKeyAndOrderFront(nil)
+            NSApp.activate(ignoringOtherApps: true)
+            return
+        }
+
+        let window = NSWindow(
+            contentRect: NSRect(x: 0, y: 0, width: 760, height: 560),
+            styleMask: [.titled, .closable, .resizable, .miniaturizable],
+            backing: .buffered,
+            defer: false
+        )
+        window.title = "Postmark Activity"
+        window.contentView = NSHostingView(rootView: ActivityWindowView(log: ActivityLog.shared))
+        window.center()
+        window.contentMinSize = NSSize(width: 620, height: 360)
+        window.isReleasedWhenClosed = false
+        window.delegate = self
+        window.makeKeyAndOrderFront(nil)
+        NSApp.activate(ignoringOtherApps: true)
+        activityWindow = window
+        ActivityLog.shared.record("Activity window opened", kind: .app, level: .debug)
+    }
+}
+
+// MARK: - NSWindowDelegate
+
+extension AppDelegate: NSWindowDelegate {
+    func windowWillClose(_ notification: Notification) {
+        guard let window = notification.object as? NSWindow else { return }
+        Task { @MainActor in
+            switch window {
+            case settingsWindow:
+                ActivityLog.shared.record("Settings window closed", kind: .app, level: .debug)
+                settingsWindow = nil
+            case activityWindow:
+                ActivityLog.shared.record("Activity window closed", kind: .app, level: .debug)
+                activityWindow = nil
+            default:
+                break
+            }
+        }
     }
 }

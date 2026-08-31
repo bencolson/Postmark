@@ -27,22 +27,43 @@ final class CategoryExecutor {
             attempted = true
             do {
                 let r = try await MailBridge.executeAppleScript(MailScripts.moveMessage(messageID: message.id, to: move))
-                if r != "OK" { errors.append("move failed: \(r)") }
-            } catch { errors.append("move: \(error.localizedDescription)") }
+                if r == "NOTFOUND" {
+                    await ActivityLog.shared.record("Message not found — move skipped", kind: .action, level: .warn, messageID: message.id)
+                } else if r != "OK" {
+                    errors.append("move failed: \(r)")
+                    await ActivityLog.shared.record("Move to \"\(move)\" failed: \(r)", kind: .action, level: .error, messageID: message.id)
+                } else {
+                    await ActivityLog.shared.record("Moved to \"\(move)\"", kind: .action, messageID: message.id)
+                }
+            } catch {
+                errors.append("move: \(error.localizedDescription)")
+                await ActivityLog.shared.record("Move error: \(error.localizedDescription)", kind: .action, level: .error, messageID: message.id)
+            }
         }
 
         if action.markRead == true {
             attempted = true
             do {
                 let r = try await MailBridge.executeAppleScript(MailScripts.markRead(messageID: message.id))
-                if r != "OK" { errors.append("markRead: \(r)") }
-            } catch { errors.append("markRead: \(error.localizedDescription)") }
+                if r == "NOTFOUND" {
+                    await ActivityLog.shared.record("Message not found — mark-read skipped", kind: .action, level: .warn, messageID: message.id)
+                } else if r != "OK" {
+                    errors.append("markRead: \(r)")
+                    await ActivityLog.shared.record("Mark-read failed: \(r)", kind: .action, level: .error, messageID: message.id)
+                } else {
+                    await ActivityLog.shared.record("Marked read", kind: .action, messageID: message.id)
+                }
+            } catch {
+                errors.append("markRead: \(error.localizedDescription)")
+                await ActivityLog.shared.record("Mark-read error: \(error.localizedDescription)", kind: .action, level: .error, messageID: message.id)
+            }
         }
 
         if action.leave == true {
             // No Mail mutation; still counts as "handled" (no action attempted,
             // so cooldown is NOT ticked by this branch alone — the caller ticks
             // based on classification success).
+            await ActivityLog.shared.record("Left in inbox (leave rule)", kind: .action, messageID: message.id)
         }
 
         if action.draftReply == true, let prompt = draftPrompt, let client {
@@ -65,11 +86,13 @@ final class CategoryExecutor {
             let subject = message.subject.hasPrefix("Re: ") || message.subject.uppercased().hasPrefix("RE:")
                 ? message.subject
                 : "Re: \(message.subject)"
-            try await MailBridge.executeAppleScript(
+            _ = try await MailBridge.executeAppleScript(
                 MailScripts.createDraft(to: message.fromEmail, subject: subject, body: reply)
             )
+            await ActivityLog.shared.record("Draft created to <\(message.fromEmail)>", kind: .action, messageID: message.id)
         } catch {
             errors.append("draftReply: \(error.localizedDescription)")
+            await ActivityLog.shared.record("Draft failed: \(error.localizedDescription)", kind: .action, level: .error, messageID: message.id)
         }
     }
 

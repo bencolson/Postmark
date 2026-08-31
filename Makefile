@@ -46,6 +46,7 @@ build: render-icon
 		--entitlements Postmark/Entitlements/Postmark.entitlements \
 		"$(EXECUTABLE)"
 	@cp "$(BUILD_DIR)/DerivedData/Build/Products/Debug/$(BUNDLE_NAME).app/Contents/Resources/AppIcon.icns" "$(APP_BUNDLE)/Contents/Resources/" 2>/dev/null || true
+	@cp Postmark/Resources/PostmarkRules.json.template "$(APP_BUNDLE)/Contents/Resources/" 2>/dev/null || true
 	@cp Postmark/App/Info.plist "$(APP_BUNDLE)/Contents/Info.plist"
 	@/usr/libexec/PlistBuddy -c "Add :CFBundleIdentifier string $(BUNDLE_ID)" "$(APP_BUNDLE)/Contents/Info.plist" 2>/dev/null || true
 	@/usr/libexec/PlistBuddy -c "Add :CFBundleExecutable string $(BUNDLE_NAME)" "$(APP_BUNDLE)/Contents/Info.plist" 2>/dev/null || true
@@ -77,6 +78,7 @@ release: render-icon
 		{ echo "❌ Expected universal binary, got: $$(lipo -archs "$(EXECUTABLE)")"; exit 1; }
 	@echo "Architectures: $$(lipo -archs "$(EXECUTABLE)")"
 	@cp "$(BUILD_DIR)/DerivedData/Build/Products/Release/$(BUNDLE_NAME).app/Contents/Resources/AppIcon.icns" "$(APP_BUNDLE)/Contents/Resources/" 2>/dev/null || true
+	@cp Postmark/Resources/PostmarkRules.json.template "$(APP_BUNDLE)/Contents/Resources/" 2>/dev/null || true
 	@cp Postmark/App/Info.plist "$(APP_BUNDLE)/Contents/Info.plist"
 	@/usr/libexec/PlistBuddy -c "Add :CFBundleIdentifier string $(BUNDLE_ID)" "$(APP_BUNDLE)/Contents/Info.plist" 2>/dev/null || true
 	@/usr/libexec/PlistBuddy -c "Add :CFBundleExecutable string $(BUNDLE_NAME)" "$(APP_BUNDLE)/Contents/Info.plist" 2>/dev/null || true

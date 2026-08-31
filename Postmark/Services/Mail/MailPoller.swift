@@ -8,15 +8,24 @@ final class MailPoller {
     private let rsString = String(Character(UnicodeScalar(UInt8(30))))
 
     func poll(daysWindow: Int) async throws -> [MailMessage] {
+        await ActivityLog.shared.record("Polling inbox (window \(daysWindow)d)", kind: .poll, level: .debug)
         guard await MailBridge.isMailRunning() else {
+            await ActivityLog.shared.record("Mail is not running", kind: .poll, level: .warn)
             throw MailBridgeError.mailNotRunning
         }
         let raw = try await MailBridge.executeAppleScript(MailScripts.listUnreadInbox(daysWindow: daysWindow))
-        return parse(raw)
+        let messages = parse(raw)
+        await ActivityLog.shared.record("Polled \(messages.count) unread message\(messages.count == 1 ? "" : "s")", kind: .poll)
+        return messages
     }
 
     func body(for messageID: String) async throws -> String {
-        try await MailBridge.executeAppleScript(MailScripts.messageBody(messageID: messageID))
+        do {
+            return try await MailBridge.executeAppleScript(MailScripts.messageBody(messageID: messageID))
+        } catch {
+            await ActivityLog.shared.record("Body fetch failed: \(error.localizedDescription)", kind: .poll, level: .error, messageID: messageID)
+            throw error
+        }
     }
 
     // MARK: - Parsing

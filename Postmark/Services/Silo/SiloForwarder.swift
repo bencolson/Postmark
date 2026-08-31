@@ -29,6 +29,12 @@ final class SiloForwarder {
         let target = address.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !target.isEmpty, !Self.placeholderTokens.contains(target) else {
             outcome.errors.append("Silo inbound address not configured — check Settings → Silo. No forward sent.")
+            await ActivityLog.shared.record(
+                "Silo forward refused — inbound address placeholder/empty",
+                kind: .silo,
+                level: .warn,
+                messageID: message.id
+            )
             return outcome
         }
 
@@ -49,8 +55,10 @@ final class SiloForwarder {
                     savedPaths[name] = path
                 }
             }
+            await ActivityLog.shared.record("Saved \(savedPaths.count) attachment\(savedPaths.count == 1 ? "" : "s") for forward", kind: .silo, messageID: message.id)
         } catch {
             outcome.errors.append("saveAttachments: \(error.localizedDescription)")
+            await ActivityLog.shared.record("Attachment save failed: \(error.localizedDescription)", kind: .silo, level: .error, messageID: message.id)
             return outcome
         }
 
@@ -72,9 +80,20 @@ final class SiloForwarder {
             let r = try await MailBridge.executeAppleScript(
                 MailScripts.forwardAttachments(to: target, subject: subject, body: body, attachments: attachFiles)
             )
-            if r != "SENDOK" { outcome.errors.append("forward: \(r)") }
+            if r != "SENDOK" {
+                outcome.errors.append("forward: \(r)")
+                await ActivityLog.shared.record("Forward failed: \(r)", kind: .silo, level: .error, messageID: message.id)
+            } else {
+                // Mask the committed address: never log the raw inbound token.
+                await ActivityLog.shared.record(
+                    "Forwarded to Silo: \(outcome.forwarded.joined(separator: ", ")) — inbound configured",
+                    kind: .silo,
+                    messageID: message.id
+                )
+            }
         } catch {
             outcome.errors.append("forward: \(error.localizedDescription)")
+            await ActivityLog.shared.record("Forward error: \(error.localizedDescription)", kind: .silo, level: .error, messageID: message.id)
         }
 
         try? FileManager.default.removeItem(at: folder)

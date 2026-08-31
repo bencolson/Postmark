@@ -2,6 +2,7 @@ import Foundation
 
 /// Loads, validates, mutates and persists `PostmarkRules.json`, and owns the
 /// per-message cooldown log (Message-ID → attempted-at timestamp).
+@MainActor
 final class RulesStore {
     static let shared = RulesStore()
     private init() {}
@@ -37,10 +38,20 @@ final class RulesStore {
 
     func load() -> PostmarkRules? {
         let url = resolvedURL()
-        guard let data = try? Data(contentsOf: url) else { return nil }
+        guard let data = try? Data(contentsOf: url) else {
+            ActivityLog.shared.record("Rules file unreadable — run aborted", kind: .error, level: .error)
+            return nil
+        }
         let decoder = JSONDecoder()
-        guard let rules = try? decoder.decode(PostmarkRules.self, from: data) else { return nil }
-        return validate(rules: rules) ? rules : nil
+        guard let rules = try? decoder.decode(PostmarkRules.self, from: data) else {
+            ActivityLog.shared.record("Rules failed to decode — check Settings → Rules", kind: .error, level: .error)
+            return nil
+        }
+        guard validate(rules: rules) else {
+            ActivityLog.shared.record("Rules failed validation — check Settings → Rules", kind: .error, level: .error)
+            return nil
+        }
+        return rules
     }
 
     /// Seed the user rule file from the bundled template on first launch.
@@ -48,6 +59,7 @@ final class RulesStore {
         if FileManager.default.fileExists(atPath: fileURL.path) { return fileURL }
         if let data = try? Data(contentsOf: templateURL) {
             try? data.write(to: fileURL, options: .atomic)
+            ActivityLog.shared.record("Seeded rules file from bundled template", kind: .app)
         }
         return fileURL
     }
@@ -112,6 +124,7 @@ final class RulesStore {
         loadCooldown()
         cooldown[messageID] = Date()
         persistCooldown()
+        ActivityLog.shared.record("Cooldown ticked", kind: .app, level: .debug, messageID: messageID)
     }
 
     // MARK: - Silo address resolution

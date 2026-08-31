@@ -27,6 +27,7 @@ final class TriageCoordinator {
         let started = Date()
 
         guard let rules = stores.load() else {
+            ActivityLog.shared.record("Rules missing or invalid — run aborted", kind: .error, level: .error)
             onFatalError?("Rule file is missing or invalid — check Settings → Rules.")
             return
         }
@@ -36,6 +37,10 @@ final class TriageCoordinator {
             return // disabled; only "Triage Now" runs (shadow mode)
         }
         let actingEnabled = rules.polling.enabled
+        ActivityLog.shared.record(
+            "Run started — \(scheduled ? "scheduled" : "manual"), \(actingEnabled ? "live" : "shadow") mode, provider \(rules.provider.type)/\(rules.provider.model)",
+            kind: .app
+        )
 
         // Provider failure is run-fatal: nothing to classify with.
         let client: AIClient
@@ -43,6 +48,7 @@ final class TriageCoordinator {
             client = try AIClientFactory.client(for: rules.provider, keychain: KeychainService())
         } catch {
             let msg = error.localizedDescription
+            ActivityLog.shared.record("Provider failure: \(msg)", kind: .error, level: .error)
             onFatalError?(msg)
             return
         }
@@ -54,6 +60,7 @@ final class TriageCoordinator {
         do {
             messages = try await poller.poll(daysWindow: rules.polling.daysWindow)
         } catch {
+            ActivityLog.shared.record("Poll failed: \(error.localizedDescription)", kind: .poll, level: .error)
             onFatalError?(error.localizedDescription)
             return
         }
@@ -67,8 +74,15 @@ final class TriageCoordinator {
         for var message in messages {
             if stores.isOnCooldown(messageID: message.id) {
                 skipped += 1
+                ActivityLog.shared.record("Skipped — on cooldown", kind: .app, level: .debug, messageID: message.id)
                 continue
             }
+
+            ActivityLog.shared.record(
+                "Seen: \"\(message.subject)\" from \(message.fromName) <\(message.fromEmail)>",
+                kind: .poll,
+                messageID: message.id
+            )
 
             // 1. Message classification (LLM). Throwing keeps the message out of
             //    cooldown so the next run retries.
@@ -77,6 +91,12 @@ final class TriageCoordinator {
                 category = try await messageClassifier.classify(message: &message)
             } catch {
                 errors.append("\(message.subject): \(error.localizedDescription)")
+                ActivityLog.shared.record(
+                    "Classification failed: \(error.localizedDescription)",
+                    kind: .classify,
+                    level: .error,
+                    messageID: message.id
+                )
                 continue
             }
 
@@ -84,6 +104,11 @@ final class TriageCoordinator {
             let actionRule = rule ?? Rule(id: "fallback", label: "Fallback", action: rules.fallback.action)
 
             byCategory[actionRule.label, default: 0] += 1
+            ActivityLog.shared.record(
+                "Classified: \(actionRule.label) (\(actionRule.id))",
+                kind: .classify,
+                messageID: message.id
+            )
             var resultErrors: [String] = []
             var forwarded: [String] = []
 
@@ -111,9 +136,20 @@ final class TriageCoordinator {
                         forwarded = classified
                             .filter { rules.attachment.forward.onlyTypes.contains($0.category) }
                             .map(\.category)
+                        ActivityLog.shared.record(
+                            "Shadow: would forward \(forwarded.isEmpty ? "nothing" : forwarded.joined(separator: ", ")) to Silo",
+                            kind: .silo,
+                            messageID: message.id
+                        )
                     }
                 } catch {
                     resultErrors.append("attachments: \(error.localizedDescription)")
+                    ActivityLog.shared.record(
+                        "Attachment pass failed: \(error.localizedDescription)",
+                        kind: .silo,
+                        level: .error,
+                        messageID: message.id
+                    )
                 }
             }
 
@@ -122,6 +158,11 @@ final class TriageCoordinator {
                 let executor = CategoryExecutor(client: client, draftPrompt: actionRule.action.draftPrompt)
                 let outcome = await executor.execute(rule: actionRule, message: message)
                 outcome.errors.forEach { resultErrors.append($0) }
+                ActivityLog.shared.record(
+                    "Route: \(actionRule.id) (\(actionRule.label))",
+                    kind: .action,
+                    messageID: message.id
+                )
             }
 
             if !resultErrors.isEmpty { errors.append(contentsOf: resultErrors) }
@@ -138,6 +179,16 @@ final class TriageCoordinator {
             // Cooldown ticks after a successful classification — a provider flake
             // during classification leaves the message un-cooldowned to retry.
             stores.recordAttempt(messageID: message.id)
+        }
+
+        if skipped > 0 {
+            ActivityLog.shared.record("Run finished — \(results.count) processed, \(skipped) skipped (cooldown)", kind: .app)
+        } else {
+            ActivityLog.shared.record("Run finished — \(results.count) processed", kind: .app)
+        }
+        if !errors.isEmpty {
+            let preview = errors.prefix(3).joined(separator: "; ")
+            ActivityLog.shared.record("Run had \(errors.count) error(s): \(preview)", kind: .error, level: .error)
         }
 
         let run = TriageRun(
