@@ -126,7 +126,13 @@ enum MailScripts {
 
     /// Move a message to a mailbox (created if missing).
     static func moveMessage(messageID: String, to mailboxName: String) -> String {
-        """
+        // Resolve the destination inside the source message's own account.
+        // A bare `mailbox mbName` lookup can silently resolve to a different
+        // mailbox with the same name (e.g. an "On My Mac" local folder), and a
+        // move into such a folder then appears to "vanish" from the iCloud
+        // mailbox. Scoping to the source account keeps the message in the same
+        // account it came from.
+        return """
         set mbName to "\(_escape(mailboxName))"
         tell application "Mail"
             try
@@ -135,12 +141,13 @@ enum MailScripts {
                 return "NOTFOUND"
             end try
             try
-                move m to mailbox mbName
+                set targetAccount to account of mailbox of m
+                move m to mailbox mbName of targetAccount
                 return "OK"
             on error
                 try
-                    make new mailbox with properties {name: mbName}
-                    move m to mailbox mbName
+                    make new mailbox at end of mailboxes of targetAccount with properties {name: mbName}
+                    move m to mailbox mbName of targetAccount
                     return "OK"
                 on error
                     return "NOMB"
