@@ -12,6 +12,9 @@ let package = Package(
             path: "Postmark",
             resources: [
                 .process("Resources"),
+            ],
+            linkerSettings: [
+                .linkedLibrary("sqlite3"),
             ]
         ),
     ]

@@ -167,18 +167,20 @@ final class TriageCoordinator {
 
             if !resultErrors.isEmpty { errors.append(contentsOf: resultErrors) }
 
-            results.append(TriageResult(
+            let result = TriageResult(
                 messageID: message.id,
                 subject: message.subject,
+                sender: message.sender,
                 category: actionRule.id,
                 forwarded: forwarded,
                 errors: resultErrors,
                 tookAction: true
-            ))
+            )
+            results.append(result)
 
             // Cooldown ticks after a successful classification — a provider flake
             // during classification leaves the message un-cooldowned to retry.
-            stores.recordAttempt(messageID: message.id)
+            stores.recordProcessed(result: result)
         }
 
         if skipped > 0 {

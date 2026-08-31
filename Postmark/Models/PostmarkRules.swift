@@ -55,14 +55,15 @@ struct ForwardConfig: Codable, Equatable {
     var onlyTypes: [String]
 }
 
-/// A single message's triage outcome, for the digest.
+/// A single message's triage outcome, for the digest and the analysis store.
 struct TriageResult {
     let messageID: String
     let subject: String
-    let category: String      // matched rule id, or "fallback"
-    let forwarded: [String]   // doc categories forwarded to Silo
+    let sender: String      // raw "Name <email>"
+    let category: String    // matched rule id, or "fallback"
+    let forwarded: [String] // doc categories forwarded to Silo
     let errors: [String]
-    let tookAction: Bool      // true if any Mail action was attempted (ticks cooldown)
+    let tookAction: Bool    // true if any Mail action was attempted (ticks cooldown)
 }
 
 struct TriageRun {

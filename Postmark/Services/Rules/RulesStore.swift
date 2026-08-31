@@ -15,15 +15,50 @@ final class RulesStore {
         return dir.appendingPathComponent("PostmarkRules.json")
     }()
 
-    private let templateURL: URL = {
-        Bundle.main.url(forResource: "PostmarkRules", withExtension: "json.template")!
+    private let templateURL: URL? = {
+        Bundle.main.url(forResource: "PostmarkRules", withExtension: "json.template")
     }()
 
-    private let cooldownURL: URL = {
-        let dir = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
-            .appendingPathComponent("Postmark", isDirectory: true)
-        return dir.appendingPathComponent("cooldown.json")
-    }()
+    /// Built-in last-resort rules used only when the bundled template is
+    /// missing — constructed through the Codable types so it always decodes.
+    /// Never trappable: the force-unwrap this replaces crashed the app at
+    /// launch when the template was absent from the bundle.
+    static var fallbackRulesJSON: String? {
+        let rules = PostmarkRules(
+            version: 1,
+            polling: PollingConfig(
+                intervalMinutes: 15,
+                daysWindow: 3,
+                enabled: false,
+                quietHours: nil
+            ),
+            provider: ProviderSpec(
+                type: "litellm",
+                model: "openrouter/laguna-s-2.1",
+                baseURL: "http://localhost:4000/v1"
+            ),
+            classifier: ClassifierConfig(
+                prompt: "You are a mail triage assistant. Classify the email into exactly one category: lead, receipt, low-priority, other. Reply with only the category word."
+            ),
+            rules: [
+                Rule(id: "lead", label: "Lead", action: Action(markRead: false, move: nil, leave: false, draftReply: true, draftPrompt: nil)),
+                Rule(id: "receipt", label: "Receipt", action: Action(markRead: true, move: "Receipts & Bookkeeping", leave: false, draftReply: false, draftPrompt: nil)),
+                Rule(id: "low-priority", label: "Low Priority", action: Action(markRead: false, move: "Low Priority", leave: false, draftReply: false, draftPrompt: nil)),
+                Rule(id: "other", label: "Other", action: Action(markRead: false, move: nil, leave: true, draftReply: false, draftPrompt: nil)),
+            ],
+            fallback: FallbackConfig(action: Action(markRead: false, move: nil, leave: true, draftReply: false, draftPrompt: nil)),
+            attachment: AttachmentConfig(
+                prompt: "Classify each attached file into one of: Call Sheets, Movement Orders, Risk Assessments, Storyboards, Treatments, Specs, Other, skip. Reply as a JSON array with filename and category fields.",
+                forward: ForwardConfig(
+                    to: "REPLACE_WITH_YOUR_Silo_INBOUND_ADDRESS",
+                    devTo: "REPLACE_WITH_YOUR_Silo_DEV_INBOUND_ADDRESS",
+                    onlyTypes: ["Call Sheets", "Movement Orders", "Risk Assessments", "Storyboards", "Treatments", "Specs"]
+                )
+            )
+        )
+        guard let data = try? JSONEncoder().encode(rules) else { return nil }
+        return String(data: data, encoding: .utf8)
+    }
 
     private static let placeholderTokens = [
         "REPLACE_WITH_YOUR_Silo_INBOUND_ADDRESS",
@@ -54,12 +89,17 @@ final class RulesStore {
         return rules
     }
 
-    /// Seed the user rule file from the bundled template on first launch.
+    /// Seed the user rule file from the bundled template on first launch,
+    /// falling back to a built-in rules payload if the template is missing.
     private func resolvedURL() -> URL {
         if FileManager.default.fileExists(atPath: fileURL.path) { return fileURL }
-        if let data = try? Data(contentsOf: templateURL) {
+        if let templateURL,
+           let data = try? Data(contentsOf: templateURL) {
             try? data.write(to: fileURL, options: .atomic)
             ActivityLog.shared.record("Seeded rules file from bundled template", kind: .app)
+        } else if let fallback = Self.fallbackRulesJSON {
+            try? fallback.data(using: .utf8)?.write(to: fileURL, options: .atomic)
+            ActivityLog.shared.record("Rules template missing — wrote built-in fallback rules", kind: .error, level: .error)
         }
         return fileURL
     }
@@ -89,42 +129,33 @@ final class RulesStore {
         try data.write(to: fileURL, options: .atomic)
     }
 
-    // MARK: - Cooldown (Message-ID → attempted-at)
+    // MARK: - Cooldown / analysis (SQLite-backed)
 
-    private var cooldown: [String: Date] = [:]
-    private var cooldownLoaded = false
-
-    private func loadCooldown() {
-        guard !cooldownLoaded else { return }
-        cooldownLoaded = true
-        guard let data = try? Data(contentsOf: cooldownURL),
-              let decoded = try? JSONDecoder().decode([String: Date].self, from: data)
-        else { return }
-        cooldown = decoded
-    }
-
-    private func persistCooldown() {
-        loadCooldown()
-        guard let data = try? JSONEncoder().encode(cooldown) else { return }
-        try? data.write(to: cooldownURL, options: .atomic)
-    }
-
-    let cooldownTTL: TimeInterval = 24 * 60 * 60
-
-    /// True when the message was already attempted within the TTL window.
+    /// True when the message was already processed within the TTL window.
     func isOnCooldown(messageID: String) -> Bool {
-        loadCooldown()
-        guard let last = cooldown[messageID] else { return false }
-        return Date().timeIntervalSince(last) < cooldownTTL
+        AnalysisStore.shared.isOnCooldown(messageID: messageID)
     }
 
-    /// Tick the cooldown for a message, recording that an action was attempted
-    /// (success or not). If no action was attempted, the message is retried next run.
-    func recordAttempt(messageID: String) {
-        loadCooldown()
-        cooldown[messageID] = Date()
-        persistCooldown()
-        ActivityLog.shared.record("Cooldown ticked", kind: .app, level: .debug, messageID: messageID)
+    /// Record a successful triage outcome — ticks the cooldown and stores the
+    /// analysis row. Only called after classification succeeds, so a provider
+    /// flake leaves the message un-ticked to retry next run.
+    func recordProcessed(result: TriageResult) {
+        AnalysisStore.shared.recordProcessed(
+            messageID: result.messageID,
+            subject: result.subject,
+            sender: result.sender,
+            category: result.category,
+            forwarded: result.forwarded,
+            errors: result.errors,
+            tookAction: result.tookAction
+        )
+        ActivityLog.shared.record("Cooldown ticked", kind: .app, level: .debug, messageID: result.messageID)
+    }
+
+    /// Dev-only: empty the analysis/cooldown database.
+    func clearAnalysis() {
+        AnalysisStore.shared.clearAll()
+        ActivityLog.shared.record("Cooldown & analysis database cleared", kind: .app)
     }
 
     // MARK: - Silo address resolution

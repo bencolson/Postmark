@@ -51,6 +51,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         NSApp.windows.forEach { $0.close() }
 
         ActivityLog.shared.record("Postmark launched", kind: .app)
+        _ = AnalysisStore.shared // create/migrate the SQLite store at startup
         setupMenuBar()
         observeUpdateState()
         observeTriageSettingChanges()
@@ -101,6 +102,15 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         statusMenu.addItem(enableTriageItem)
         statusMenu.addItem(digestItem)
         statusMenu.addItem(quietHoursItem)
+        #if DEBUG
+        let clearAnalysisItem = NSMenuItem(
+            title: "Clear Cooldown & Analysis",
+            action: #selector(clearAnalysis),
+            keyEquivalent: ""
+        )
+        clearAnalysisItem.target = self
+        statusMenu.addItem(clearAnalysisItem)
+        #endif
         statusMenu.addItem(NSMenuItem.separator())
         statusMenu.addItem(NSMenuItem(title: "Settings…", action: #selector(openSettings), keyEquivalent: ","))
         let activityItem = NSMenuItem(title: "Activity…", action: #selector(openActivity), keyEquivalent: "a")
@@ -319,6 +329,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     // MARK: - Settings window
 
+    #if DEBUG
+    /// Dev-only: empty the SQLite cooldown/analysis database.
+    @objc private func clearAnalysis() {
+        RulesStore.shared.clearAnalysis()
+    }
+    #endif
+
     @objc private func openSettings() {
         if let window = settingsWindow {
             if window.isMiniaturized { window.deminiaturize(nil) }
@@ -332,7 +349,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             .environmentObject(updateChecker)
 
         let window = NSWindow(
-            contentRect: NSRect(x: 0, y: 0, width: 620, height: 640),
+            contentRect: NSRect(x: 0, y: 0, width: 1200, height: 640),
             styleMask: [.titled, .closable, .resizable, .miniaturizable],
             backing: .buffered,
             defer: false
@@ -340,7 +357,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         window.title = "Postmark"
         window.contentView = NSHostingView(rootView: view)
         window.center()
-        window.contentMinSize = NSSize(width: 560, height: 520)
+        window.contentMinSize = NSSize(width: 1000, height: 520)
         window.isReleasedWhenClosed = false
         window.delegate = self
         window.makeKeyAndOrderFront(nil)
