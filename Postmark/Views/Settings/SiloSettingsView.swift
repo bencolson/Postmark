@@ -1,79 +1,73 @@
 import SwiftUI
 
-/// Silo inbound addresses. These are per-user tokens (`<token>@mail.silo.day`);
-/// they live in Keychain, never in the repo or rules file. A debug build uses
-/// the dev address; a release build uses production.
+/// Silo inbound production delivery address. A single full email address on
+/// `mail.silo.day` is stored in the Keychain — never in the repo or rules file.
 struct SiloSettingsView: View {
     @EnvironmentObject var settingsStore: SettingsStore
 
-    @State private var prodAddress = ""
-    @State private var devAddress = ""
+    @State private var deliveryAddress = ""
     @State private var savedMessage: String?
 
-    private static let placeholders = ["REPLACE_WITH_YOUR_Silo_INBOUND_ADDRESS", "REPLACE_WITH_YOUR_Silo_DEV_INBOUND_ADDRESS"]
+    private static let placeholder = "REPLACE_WITH_YOUR_Silo_INBOUND_ADDRESS"
+    private static let addressRegex = try! NSRegularExpression(
+        pattern: "^[A-Za-z0-9._%+-]+@mail\\.silo\\.day$",
+        options: [.caseInsensitive]
+    )
 
     var body: some View {
         Form {
             Section {
-                LabeledContent("Production address") {
-                    TextField("<token>@mail.silo.day", text: $prodAddress)
+                LabeledContent("Delivery address") {
+                    TextField("you@mail.silo.day", text: $deliveryAddress)
                         .textFieldStyle(.roundedBorder)
-                        .frame(width: 300)
-                }
-                LabeledContent("Dev address") {
-                    TextField("<token>@mail-dev.silocall.com", text: $devAddress)
-                        .textFieldStyle(.roundedBorder)
-                        .frame(width: 300)
+                        .frame(width: 320)
                 }
                 HStack {
-                    Button("Save addresses") { save() }
+                    Button("Save address") { save() }
                     if let savedMessage {
-                        Text(savedMessage).font(.system(size: 11)).foregroundStyle(savedMessage.hasPrefix("Saved") ? .green : .red)
+                        Text(savedMessage)
+                            .font(.system(size: 11))
+                            .foregroundStyle(savedMessage.hasPrefix("Saved") ? .green : .red)
                     }
                 }
             } header: {
                 Text("Inbound email")
             } footer: {
-                Text("Forwarded call sheets and production docs are addressed to the Silo user's inbound address and filed by shoot date. A debug build always forwards to the dev address; release uses production.")
-            }
-
-            Section {
-                LabeledContent("Effective address (this build)") {
-                    Text(effectiveAddress.isEmpty ? "(not configured)" : effectiveAddress)
-                        .font(.system(size: 11, design: .monospaced))
-                        .foregroundStyle(effectiveIsPlaceholder ? .red : .secondary)
-                }
-                if effectiveIsPlaceholder {
-                    Text("The runtime guard refuses to forward to a placeholder. Configure both addresses above before enabling triage.")
-                        .font(.system(size: 10))
-                        .foregroundStyle(.red)
-                }
+                Text("Attachments forwarded to Silo are addressed to this production inbound address. Any address on mail.silo.day is accepted; the full address is stored in the Keychain and never in the repo.")
             }
         }
         .formStyle(.grouped)
         .onAppear(perform: load)
     }
 
-    private var effectiveAddress: String {
-        settingsStore.siloDevAddress() ?? settingsStore.siloAddress() ?? ""
-    }
-
-    private var effectiveIsPlaceholder: Bool {
-        effectiveAddress.isEmpty || Self.placeholders.contains(effectiveAddress)
-    }
-
     private func load() {
-        prodAddress = settingsStore.siloAddress() ?? ""
-        devAddress = settingsStore.siloDevAddress() ?? ""
+        deliveryAddress = settingsStore.siloAddress() ?? ""
     }
 
     private func save() {
+        let trimmed = deliveryAddress.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard trimmed != Self.placeholder else {
+            savedMessage = "That's a placeholder, not a real address"
+            return
+        }
+        guard trimmed.isEmpty || Self.isValidAddress(trimmed) else {
+            savedMessage = "Enter a full email address on @mail.silo.day (e.g. you@mail.silo.day)"
+            return
+        }
         do {
-            try settingsStore.setSiloAddress(prodAddress.trimmingCharacters(in: .whitespacesAndNewlines))
-            try settingsStore.setSiloDevAddress(devAddress.trimmingCharacters(in: .whitespacesAndNewlines))
-            savedMessage = "Saved to Keychain"
+            if trimmed.isEmpty {
+                settingsStore.deleteSiloAddress()
+            } else {
+                try settingsStore.setSiloAddress(trimmed)
+            }
+            savedMessage = "Saved — forwarded attachments will use \(trimmed.isEmpty ? "no address (forwards refused)" : trimmed)"
         } catch {
             savedMessage = error.localizedDescription
         }
+    }
+
+    private static func isValidAddress(_ address: String) -> Bool {
+        let range = NSRange(address.startIndex..., in: address)
+        return addressRegex.firstMatch(in: address, options: [], range: range) != nil
     }
 }

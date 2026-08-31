@@ -77,5 +77,4 @@ final class KeychainService {
 
 extension KeychainService {
     static let siloInboundLabel = "silo.inbound"
-    static let siloInboundDevLabel = "silo.inbound.dev"
 }

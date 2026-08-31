@@ -51,7 +51,6 @@ final class RulesStore {
                 prompt: "Classify each attached file into one of: Call Sheets, Movement Orders, Risk Assessments, Storyboards, Treatments, Specs, Other, skip. Reply as a JSON array with filename and category fields.",
                 forward: ForwardConfig(
                     to: "REPLACE_WITH_YOUR_Silo_INBOUND_ADDRESS",
-                    devTo: "REPLACE_WITH_YOUR_Silo_DEV_INBOUND_ADDRESS",
                     onlyTypes: ["Call Sheets", "Movement Orders", "Risk Assessments", "Storyboards", "Treatments", "Specs"]
                 )
             )
@@ -163,16 +162,10 @@ final class RulesStore {
 
     // MARK: - Silo address resolution
 
-    /// Prod only: a debug build resolves `devTo`, a release build resolves `to`.
-    /// The caller asserts the resolved address is non-empty and not a placeholder
-    /// before forwarding (see SiloForwarder).
+    /// The Silo production inbound delivery address (full email on
+    /// `mail.silo.day`), read from the Keychain. Empty until configured in
+    /// Settings → Silo; `SiloForwarder` refuses empty/placeholder addresses.
     var siloAddress: String {
-        #if DEBUG
-        return keychain.getKey(label: KeychainService.siloInboundDevLabel)
-            ?? keychain.getKey(label: KeychainService.siloInboundLabel) ?? ""
-        #else
-        return keychain.getKey(label: KeychainService.siloInboundLabel)
-            ?? keychain.getKey(label: KeychainService.siloInboundDevLabel) ?? ""
-        #endif
+        keychain.getKey(label: KeychainService.siloInboundLabel) ?? ""
     }
 }

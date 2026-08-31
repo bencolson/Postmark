@@ -57,7 +57,6 @@ struct AttachmentConfig: Codable {
 
 struct ForwardConfig: Codable, Equatable {
     var to: String
-    var devTo: String
     var onlyTypes: [String]
 }
 

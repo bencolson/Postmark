@@ -51,7 +51,7 @@ final class SettingsStore: ObservableObject {
         keychain.getKey(for: .litellm)
     }
 
-    // MARK: - Silo inbound addresses (Keychain)
+    // MARK: - Silo inbound address (Keychain)
 
     func setSiloAddress(_ address: String) throws {
         try keychain.setKey(address, label: KeychainService.siloInboundLabel)
@@ -61,12 +61,8 @@ final class SettingsStore: ObservableObject {
         keychain.getKey(label: KeychainService.siloInboundLabel)
     }
 
-    func setSiloDevAddress(_ address: String) throws {
-        try keychain.setKey(address, label: KeychainService.siloInboundDevLabel)
-    }
-
-    func siloDevAddress() -> String? {
-        keychain.getKey(label: KeychainService.siloInboundDevLabel)
+    func deleteSiloAddress() {
+        keychain.deleteKey(label: KeychainService.siloInboundLabel)
     }
 
     static let triageSettingDidChange = Notification.Name("postmark.triageSettingDidChange")
