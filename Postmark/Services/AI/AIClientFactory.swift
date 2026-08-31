@@ -25,11 +25,19 @@ struct ProviderSpec: Codable, Equatable {
     }
 }
 
+@MainActor
 enum AIClientFactory {
     static func client(for spec: ProviderSpec, keychain: KeychainService) throws -> AIClient {
         switch spec.provider {
         case .litellm:
-            let key = try keychain.getKey(for: .litellm) ?? ""
+            let key = (try? keychain.getKey(for: .litellm)) ?? ""
+            if key.isEmpty {
+                ActivityLog.shared.record(
+                    "LiteLLM key not stored — requests will be unauthenticated. Set it in Settings → Providers → LiteLLM key → Save.",
+                    kind: .error,
+                    level: .error
+                )
+            }
             return OpenAIClient(baseURL: spec.resolvedBaseURL.isEmpty ? "http://localhost:4000/v1" : spec.resolvedBaseURL,
                                 apiKey: key, model: spec.model, provider: .litellm)
         case .openai:
