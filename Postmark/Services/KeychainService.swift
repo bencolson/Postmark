@@ -16,7 +16,7 @@ enum KeychainError: LocalizedError {
 }
 
 final class KeychainService {
-    private let serviceName = "digital.colson.postmark"
+    private let serviceName = "ltd.colson.postmark"
 
     // MARK: - Generic labels (silo inbound address, etc.)
 

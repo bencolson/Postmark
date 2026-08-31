@@ -1,6 +1,6 @@
 APP_NAME = Postmark
 BUNDLE_NAME = Postmark
-BUNDLE_ID = digital.colson.postmark
+BUNDLE_ID = ltd.colson.postmark
 VERSION = 0.2.0
 BUILD_DIR = build
 APP_BUNDLE = $(BUILD_DIR)/$(APP_NAME).app

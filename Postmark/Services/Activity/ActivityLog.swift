@@ -51,7 +51,7 @@ final class ActivityLog: ObservableObject {
     private let maxLines = 10_000
     private var linesAppended: Int
 
-    private let logQueue = DispatchQueue(label: "digital.colson.postmark.activity", qos: .utility)
+    private let logQueue = DispatchQueue(label: "ltd.colson.postmark.activity", qos: .utility)
 
     private init() {
         let dir = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]

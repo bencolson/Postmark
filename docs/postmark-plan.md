@@ -118,7 +118,7 @@ Notes:
 
 ## Implementation steps (ordered)
 
-1. **Fork + bootstrap**: clone base repo into `/Users/bencolson/Developer/Postmark` (empty dir confirmed — do a clean `git init`, this isn't a git-repo yet). Rename bundle id to `digital.colson.postmark`; set app name **Postmark**. Swap branding: delete the repo-root `laurel.svg`/`logo-dark.png`/`logo-light.png` and the `logo-dark`/`logo-light` README image; regenerate as an `envelope.badge` render via `scripts/render-icon.swift`. Keep MIT LICENSE. Update README to the Postmark goal (triage + call-sheet forwarding to Silo), icon/style, and the dev/prod env split for the inbound address.
+1. **Fork + bootstrap**: clone base repo into `/Users/bencolson/Developer/Postmark` (empty dir confirmed — do a clean `git init`, this isn't a git-repo yet). Rename bundle id to `ltd.colson.postmark`; set app name **Postmark**. Swap branding: delete the repo-root `laurel.svg`/`logo-dark.png`/`logo-light.png` and the `logo-dark`/`logo-light` README image; regenerate as an `envelope.badge` render via `scripts/render-icon.swift`. Keep MIT LICENSE. Update README to the Postmark goal (triage + call-sheet forwarding to Silo), icon/style, and the dev/prod env split for the inbound address.
 
 2. **Strip compose path**: remove `ComposerPanelController/ComposerView/ComposerViewModel`, `SystemPrompt.compose/summarize`, `MailBridge.fetchComposerContext/insertReply` usages, the `⌥H` hotkey compose flow, and the `ComposerView` from `AppDelegate`. Keep `MailBridge.executeAppleScript`, `KeychainService`, `AIClient*`, `ModelFetcher`, `ModelCache`, `SettingsStore`, `UpdateChecker`.
 
