@@ -118,7 +118,10 @@ final class RulesStore {
 
     private func validateAction(_ action: Action, ids: Set<String>) -> Bool {
         if let move = action.move, move.trimmingCharacters(in: .whitespaces).isEmpty { return false }
-        if action.draftPrompt != nil, !(action.draftReply ?? false) { return false }
+        // Drafting without a prompt is a real misconfiguration; keeping a
+        // prompt while drafts are disabled is harmless, so only require the
+        // former direction.
+        if action.draftReply == true, action.draftPrompt == nil { return false }
         return true
     }
 
