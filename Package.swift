@@ -2,14 +2,14 @@
 import PackageDescription
 
 let package = Package(
-    name: "AIMailComposer",
+    name: "Postmark",
     platforms: [
         .macOS(.v14),
     ],
     targets: [
         .executableTarget(
-            name: "AIMailComposer",
-            path: "AIMailComposer",
+            name: "Postmark",
+            path: "Postmark",
             resources: [
                 .process("Resources"),
             ]

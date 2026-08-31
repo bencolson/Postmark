@@ -1,0 +1,36 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<key>CFBundleIconFile</key>
+	<string>AppIcon</string>
+	<key>CFBundleName</key>
+	<string>Postmark</string>
+	<key>CFBundleDisplayName</key>
+	<string>Postmark</string>
+	<key>CFBundlePackageType</key>
+	<string>APPL</string>
+	<key>LSUIElement</key>
+	<true/>
+	<key>LSMinimumSystemVersion</key>
+	<string>14.0</string>
+	<key>NSAppleEventsUsageDescription</key>
+	<string>Postmark needs access to Apple Mail to read unread inbox messages and apply routing actions (move, mark read, forward, draft).</string>
+	<key>NSAccessibilityUsageDescription</key>
+	<string>Postmark can optionally use Accessibility to fall back to reading Mail's compose window when AppleScript is unavailable.</string>
+	<key>NSCameraUsageDescription</key>
+	<string>Postmark does not use the camera.</string>
+	<!-- Allow the LiteLLM provider (running locally at 127.0.0.1:4000) and other
+	     local services over cleartext HTTP. Exempts localhost / loopback only;
+	     ATS still forces TLS for any public hostname. -->
+	<key>NSAppTransportSecurity</key>
+	<dict>
+		<key>NSAllowsLocalNetworking</key>
+		<true/>
+		<key>NSAllowsArbitraryLoads</key>
+		<false/>
+	</dict>
+	<key>NSHumanReadableCopyright</key>
+	<string>Copyright © 2025 Ben Colson. MIT licensed.</string>
+</dict>
+</plist>

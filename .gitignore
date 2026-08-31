@@ -32,3 +32,10 @@ Package.resolved
 
 # Docs
 # GitHub Pages is published from docs/, so site assets in that directory must be tracked.
+
+# Postmark
+# The real rule file never leaves the user's machine. Only the .template ships.
+PostmarkRules.json
+Postmark/Resources/PostmarkRules.json
+# Local app-state (cooldown log, digests)
+Application Support/

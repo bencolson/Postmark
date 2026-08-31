@@ -51,8 +51,9 @@ echo "Mounted at: $ACTUAL_MOUNT"
 DISK_NAME=$(basename "$ACTUAL_MOUNT")
 
 echo "Configuring DMG window layout..."
-# Use DS_Store approach with AppleScript for icon positioning
-osascript <<APPLESCRIPT
+# Finder layout is cosmetic; a timeout here (common on headless/CI or a busy
+# Finder) must not fail the DMG build.
+osascript <<APPLESCRIPT || true
 tell application "Finder"
     tell disk "$DISK_NAME"
         open

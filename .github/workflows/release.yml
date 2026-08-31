@@ -121,19 +121,34 @@ jobs:
         run: |
           make release-dmg \
             VERSION=${{ steps.version.outputs.version }} \
-            SIGNING_IDENTITY="Developer ID Application: Jan Philip Wahle ($APPLE_TEAM_ID)" \
+            SIGNING_IDENTITY="${{ secrets.MACOS_SIGNING_IDENTITY }}" \
             APPLE_ID="$APPLE_ID" \
             TEAM_ID="$APPLE_TEAM_ID" \
             KEYCHAIN_PROFILE=AC_PASSWORD \
-            KEYCHAIN_PATH="$RUNNER_TEMP/build.keychain-db"
+            KEYCHAIN_PATH="$RUNNER_TEMP/build.keychain-db" \
+            SPARKLE_PRIV_KEY="${{ secrets.SPARKLE_PRIV_KEY }}"
+
+      - name: Build public Sparkle appcast
+        if: steps.version.outputs.skip != 'true'
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          SPARKLE_PRIV_KEY: ${{ secrets.SPARKLE_PRIV_KEY }}
+        run: |
+          make appcast
+          # Commit the regenerated public appcast back to the repo.
+          git config user.name github-actions
+          git config user.email github-actions@github.com
+          git add appcast.xml
+          git commit -m "chore: publish appcast v${{ steps.version.outputs.version }}" || true
+          git push
 
       - name: Verify Gatekeeper acceptance and universal binary
         if: steps.version.outputs.skip != 'true'
         run: |
-          spctl -a -vvv -t install "build/Apple Mail AI Plugin.app"
-          spctl -a -vvv -t open --context context:primary-signature build/AIMailComposer.dmg
-          lipo "build/Apple Mail AI Plugin.app/Contents/MacOS/AIMailComposer" -verify_arch arm64 x86_64
-          echo "Architectures: $(lipo -archs "build/Apple Mail AI Plugin.app/Contents/MacOS/AIMailComposer")"
+          spctl -a -vvv -t install "build/Postmark.app"
+          spctl -a -vvv -t open --context context:primary-signature build/Postmark.dmg
+          lipo "build/Postmark.app/Contents/MacOS/Postmark" -verify_arch arm64 x86_64
+          echo "Architectures: $(lipo -archs 'build/Postmark.app/Contents/MacOS/Postmark')"
 
       - name: Clean up keychain
         if: always() && steps.version.outputs.skip != 'true'
@@ -145,7 +160,7 @@ jobs:
         uses: softprops/action-gh-release@v2
         with:
           tag_name: ${{ steps.version.outputs.tag }}
-          name: Apple Mail AI Plugin ${{ steps.version.outputs.tag }}
-          files: build/AIMailComposer.dmg
+          name: Postmark ${{ steps.version.outputs.tag }}
+          files: build/Postmark.dmg
           make_latest: true
           generate_release_notes: true

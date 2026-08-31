@@ -1,148 +1,102 @@
 <p align="center">
-  <picture>
-    <source media="(prefers-color-scheme: dark)" srcset="logo-dark.png">
-    <img src="logo-light.png" width="128" height="128" alt="Apple Mail AI Plugin logo">
-  </picture>
+  <img src="Postmark/Resources/Assets.xcassets/AppIcon.appiconset/app-icon-512x512@1x.png" width="128" height="128" alt="Postmark logo">
 </p>
 
-<h1 align="center">Apple Mail AI Plugin</h1>
+<h1 align="center">Postmark</h1>
 
 <p align="center">
-  The missing AI agent for Apple Mail. Apple Mail AI Plugin is a native macOS menu bar app that uses AI (Claude, GPT, Gemini) to help you write email replies in Apple Mail.
+  A native macOS menu-bar app that triages your Apple Mail inbox with an LLM and
+  forwards production call sheets straight into Silo. Postmark replaces the n8n
+  Email Triage pipeline with a quiet background daemon that reads unread Mail,
+  classifies each message, applies per-category routing, and runs a parallel
+  attachment pass that forwards call sheets to your Silo inbound address.
 </p>
 
 <p align="center">
   <a href="#installation">Installation</a> &middot;
-  <a href="#get-your-api-key">Get Your API Key</a> &middot;
+  <a href="#configuration">Configuration</a> &middot;
   <a href="#usage">Usage</a> &middot;
-  <a href="#building-from-source">Build from Source</a>
+  <a href="#building-from-source">Build from Source</a> &middot;
+  <a href="#cutover--shadow-mode">Cutover</a>
 </p>
 
 ---
 
-The **Apple Mail AI Plugin** lives in your menu bar and connects directly to Apple Mail. When you're composing a reply, press **Option + H** to open the composer panel. Type a few thoughts about what you want to say, pick an AI model, and the app writes your reply — matching the language and tone of the conversation.
+## How it works
 
-**Bring your own API key.** No accounts, no subscriptions, no middleman. Your key is stored in macOS Keychain and calls go directly to the provider.
+```
+MailPoller (15 min) → RuleEngine (Message-ID cooldown)
+                        ├─ MessageClassifier  → category  → CategoryExecutor   (move / mark read / draft reply)
+                        └─ AttachmentClassifier → doc type → SiloForwarder      (Mail forward → <Silo inbound addr>)
+```
 
-## Features
+- **Background daemon**: silent 15-minute auto-triage from the menu bar. No per-message approval; a per-run digest notification summarises what happened.
+- **Two classifiers**, mirroring the old n8n pipeline: a *message* classifier (→ `lead`/`receipt`/`low-priority`/`other`) and an *attachment* classifier (→ `Call Sheets`/`Movement Orders`/`Risk Assessments`/`Storyboards`/`Treatments`/`Specs`/`Other`/`skip`). The attachment pass runs on every message that has attachments, regardless of category — that parallel structure is what makes a shadow-mode diff against n8n meaningful.
+- **Dev/prod env split**: forwarding targets the **dev** Silo inbound address in debug builds and the **prod** address only in release builds, gated by a runtime check that refuses to send to a placeholder address.
+- **No secrets in the bundle**: provider keys live in Keychain; the Silo inbound address and rule prompts live in `~/Library/Application Support/Postmark/PostmarkRules.json` (user copy), seeded from a committed `PostmarkRules.json.template`.
 
-- **Menu bar app** — stays out of your way until you need it
-- **Works with Apple Mail** — reads your email thread, recipients, subject, and current draft
-- **Multiple AI providers** — Anthropic (Claude), OpenAI (GPT), Google Gemini, OpenRouter, and TrustedTokens (EU-sovereign)
-- **Streaming responses** — see the reply as it's being written
-- **Language matching** — automatically replies in the same language as the conversation
-- **Keyboard shortcut** — **⌥H** (Option + H) to open from anywhere
-- **Secure key storage** — API keys stored in macOS Keychain, never on disk
+## Configuration
 
-## Installation
+Rules live in `~/Library/Application Support/Postmark/PostmarkRules.json`, created on first launch from the committed `Postmark/Resources/PostmarkRules.json.template`. Edit it directly or via **Settings → Rules**.
 
-**Requirements:** macOS 14 (Sonoma) or later. On recent macOS versions, Mail's AppleScript interface no longer reliably exposes compose windows, so the app can optionally use the Accessibility API to read your draft — grant **Accessibility** permission when the in-app banner suggests it (System Settings → Privacy & Security → Accessibility). The banner is dismissible; a blank new-message compose keeps working without it.
-
-### Download
-
-Grab the latest `.dmg` from the [Webpage](https://jpwahle.github.io/apple-mail-ai-plugin/).
-
-## Get Your API Key
-
-The Apple Mail AI Plugin calls AI providers directly — you'll need an API key from at least one provider. Pick whichever you prefer:
-
-### Anthropic (Claude)
-
-1. Go to [console.anthropic.com](https://console.anthropic.com/)
-2. Sign up or log in
-3. Navigate to **API Keys** in the sidebar
-4. Click **Create Key**, give it a name, and copy the key
-
-### OpenAI (GPT)
-
-1. Go to [platform.openai.com](https://platform.openai.com/)
-2. Sign up or log in
-3. Navigate to **API Keys** in the sidebar
-4. Click **Create new secret key**, name it, and copy the key
-
-### Google Gemini
-
-1. Go to [aistudio.google.com/apikey](https://aistudio.google.com/apikey)
-2. Sign in with your Google account
-3. Click **Create API Key**, select a project (or create one), and copy the key
-
-### OpenRouter
-
-1. Go to [openrouter.ai](https://openrouter.ai/)
-2. Sign up or log in
-3. Navigate to **Keys** in the sidebar
-4. Click **Create Key**, name it, and copy the key
-
-> **Tip:** OpenRouter gives you access to models from many providers through a single key. Great if you want to try different models without managing multiple accounts.
-
-### TrustedTokens
-
-1. Go to [trustedtokens.eu](https://trustedtokens.eu/)
-2. Sign up for a free trial
-3. Open **Account** to find your API token
-4. Copy the token
-
-> **Tip:** TrustedTokens is an EU-sovereign, OpenAI-compatible gateway hosted in Germany — all data processed in the EU. Model ids follow the `provider/model` convention (e.g. `skainet/zai-org/GLM-5.2`).
-
-### Add Your Key to the App
-
-1. Click the **Apple Mail AI Plugin** icon in your menu bar
-2. Open **Settings**
-3. Paste your API key for the provider you chose
-4. The app will automatically fetch available models from that provider
+The shipped template contains the exact classification prompts ported verbatim from the n8n Email Triage workflow, so a Postmark classification is driven by byte-identical instructions to the pipeline it replaces.
 
 ## Usage
 
-1. Open **Apple Mail** and start composing a reply
-2. Press **⌥H** (Option + H) to open the composer panel
-3. Type a few words describing what you want to say (e.g. "sounds good, let's meet thursday")
-4. Pick a model from the dropdown
-5. Hit **Generate** — the reply streams into your compose window
+- Click the menu-bar icon → **Triage Now** runs a poll immediately.
+- **Enable Triage** toggles the 15-minute background schedule (off by default until shadow mode passes).
+- **Quiet Hours** suppresses the digest notification.
+- The status icon walks `envelope` → `envelope.badge` → `hourglass` → `envelope.badge.fill` (digest ready) / `exclamationmark.triangle.fill` (errors).
 
-The app reads the full email thread for context, so the generated reply stays relevant to the conversation.
+## Installation
+
+**Requirements:** macOS 14 (Sonoma) or later. Grant **Automation** permission for Mail when prompted. Postmark reads Mail via AppleScript only, so no Accessibility permission is required for inbox enumeration.
+
+Grab the latest `.dmg` from the [releases](https://github.com/bencolson/Postmark/releases).
 
 ## Building from Source
 
 ```bash
-git clone https://github.com/jpwahle/aimail.git
-cd aimail
+git clone https://github.com/bencolson/Postmark.git
+cd Postmark
 make build
 make run
 ```
-
-### Developing in Xcode
-
-Open `AIMailComposer.xcodeproj` and hit Run — the shared `AIMailComposer`
-scheme builds and launches the app bundle directly (requires Xcode 16 or
-later). The project uses a synchronized folder reference, so new source
-files added under `AIMailComposer/` are picked up automatically.
 
 ### Available Make Targets
 
 | Command | Description |
 |---------|-------------|
-| `make build` | Debug build |
+| `make build` | Debug build (renders icon + compiles) |
 | `make run` | Build and launch the app |
-| `make release` | Optimized release build |
+| `make release` | Optimized universal (arm64 + x86_64) build |
 | `make sign` | Code sign (ad-hoc or with `SIGNING_IDENTITY`) |
 | `make dmg` | Create a `.dmg` installer |
-| `make install` | Install to `/Applications` |
+| `make render-icon` | Regenerate app-icon slices from SF Symbol |
+| `make appcast` | Generate the Sparkle `appcast.xml` from GitHub releases |
 | `make clean` | Remove build artifacts |
 
-### Notarization (for distribution)
+### Developing in Xcode
 
-```bash
-make notarize \
-  SIGNING_IDENTITY="Developer ID Application: ..." \
-  APPLE_ID=you@example.com \
-  TEAM_ID=ABC123
-```
+Open `Postmark.xcodeproj` and hit Run — the shared `Postmark` scheme builds and launches the app bundle directly (requires Xcode 16+). The project uses a synchronized folder group, so new Swift files under `Postmark/` are picked up automatically.
+
+## Cutover & Shadow Mode
+
+Before Postmark replaces n8n, run **shadow mode**:
+
+1. Postmark rules are pinned to match n8n's categories exactly.
+2. In shadow mode Postmark classifies only — no Mail actions, no Silo forwards. It logs outcomes.
+3. Diff Postmark's per-message category against n8n's last clean run (G1 gate: ≤2 divergences over 48h / >200 messages).
+4. Once parity holds + 1 week clean, disable the n8n Email Triage workflow, stop `com.bencolson.email-triage-poll`, then flip Postmark's **Enable Triage** toggle to act for real.
+5. After the mac-data-api `/mail/inbox` family is confirmed unused, delete it.
+
+See the plan file `docs/postmark-plan.md` for the full architecture, rule schema, and validation gates G1–G5.
 
 ## Privacy
 
-- API keys are stored in macOS Keychain — never written to disk as plain text
-- Email content is sent directly to your chosen AI provider and nowhere else
-- No analytics, no telemetry, no data collection
+- Provider API keys are stored in macOS Keychain — never written to disk as plaintext.
+- Email content is sent only to your chosen LLM provider and (for forwardable attachments) to your siloed Silo inbound address — never anywhere else.
+- No analytics, no telemetry, no data collection.
 
 ## License
 
