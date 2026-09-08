@@ -121,6 +121,13 @@ final class RulesStore {
         // prompt while drafts are disabled is harmless, so only require the
         // former direction.
         if action.draftReply == true, action.draftPrompt == nil { return false }
+        // A configured forward must look like an email address — catches typos
+        // before they silently fail at send time.
+        if let forwardTo = action.forwardTo?.trimmingCharacters(in: .whitespaces),
+           !forwardTo.isEmpty,
+           !forwardTo.contains("@") {
+            return false
+        }
         return true
     }
 

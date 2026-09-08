@@ -35,7 +35,8 @@
       "label": "Receipts",
       "action": {
         "move": "Receipts & Bookkeeping",
-        "markRead": true
+        "markRead": true,
+        "forwardTo": ""
       }
     },
     {

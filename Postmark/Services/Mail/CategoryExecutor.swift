@@ -6,10 +6,12 @@ import Foundation
 final class CategoryExecutor {
     private let client: AIClient?
     private let draftPrompt: String?
+    private let forwarder: SiloForwarder
 
-    init(client: AIClient?, draftPrompt: String?) {
+    init(client: AIClient?, draftPrompt: String?, forwarder: SiloForwarder = SiloForwarder()) {
         self.client = client
         self.draftPrompt = draftPrompt
+        self.forwarder = forwarder
     }
 
     struct Result {
@@ -69,6 +71,13 @@ final class CategoryExecutor {
         if action.draftReply == true, let prompt = draftPrompt, let client {
             attempted = true
             await draftReply(message: message, using: client, prompt: prompt, errors: &errors)
+        }
+
+        if let forwardTo = action.forwardTo?.trimmingCharacters(in: .whitespacesAndNewlines), !forwardTo.isEmpty {
+            attempted = true
+            await ActivityLog.shared.record("Forwarding message + attachments to <\(forwardTo)>", kind: .silo, messageID: message.id)
+            let outcome = await forwarder.forwardWholeMessage(message: message, to: forwardTo)
+            outcome.errors.forEach { errors.append($0) }
         }
 
         return Result(attempted: attempted, errors: errors)

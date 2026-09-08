@@ -155,12 +155,18 @@ final class TriageCoordinator {
 
             // 3. Category route — only in live mode.
             if actingEnabled {
-                let executor = CategoryExecutor(client: client, draftPrompt: actionRule.action.draftPrompt)
+                let executor = CategoryExecutor(client: client, draftPrompt: actionRule.action.draftPrompt, forwarder: forwarder)
                 let outcome = await executor.execute(rule: actionRule, message: message)
                 outcome.errors.forEach { resultErrors.append($0) }
                 ActivityLog.shared.record(
                     "Route: \(actionRule.id) (\(actionRule.label))",
                     kind: .action,
+                    messageID: message.id
+                )
+            } else if let forwardTo = actionRule.action.forwardTo?.trimmingCharacters(in: .whitespacesAndNewlines), !forwardTo.isEmpty {
+                ActivityLog.shared.record(
+                    "Shadow: would forward message + \(message.attachments.count) attachment(s) to \(forwardTo)",
+                    kind: .silo,
                     messageID: message.id
                 )
             }

@@ -43,22 +43,9 @@ final class SiloForwarder {
         try? FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
 
         // Save every attachment of the message once; pick the eligible ones.
-        var savedPaths: [String: String] = [:]
-        do {
-            let raw = try await MailBridge.executeAppleScript(MailScripts.saveAttachments(messageID: message.id, to: folder.path))
-            for line in raw.components(separatedBy: "\n") {
-                let parts = line.split(separator: ":", maxSplits: 2)
-                guard parts.count == 3 else { continue }
-                let name = String(parts[0])
-                let path = String(parts[2])
-                if FileManager.default.fileExists(atPath: path) {
-                    savedPaths[name] = path
-                }
-            }
-            await ActivityLog.shared.record("Saved \(savedPaths.count) attachment\(savedPaths.count == 1 ? "" : "s") for forward", kind: .silo, messageID: message.id)
-        } catch {
-            outcome.errors.append("saveAttachments: \(error.localizedDescription)")
-            await ActivityLog.shared.record("Attachment save failed: \(error.localizedDescription)", kind: .silo, level: .error, messageID: message.id)
+        let savedPaths = await saveAttachments(of: message, into: folder, outcome: &outcome)
+        guard !outcome.errors.contains(where: { $0.hasPrefix("saveAttachments") }) else {
+            try? FileManager.default.removeItem(at: folder)
             return outcome
         }
 
@@ -98,5 +85,87 @@ final class SiloForwarder {
 
         try? FileManager.default.removeItem(at: folder)
         return outcome
+    }
+
+    /// Forward the whole message — subject, body and every attachment — to an
+    /// arbitrary address (the per-rule `forwardTo` action, e.g. a bookkeeping
+    /// or Hubdoc-style inbox). Unlike `forward`, there is no category gate: the
+    /// entire message goes, attachments or not.
+    func forwardWholeMessage(message: MailMessage, to address: String) async -> Outcome {
+        var outcome = Outcome()
+        let target = address.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !target.isEmpty, !Self.placeholderTokens.contains(target) else {
+            outcome.errors.append("Forward address not configured — check Settings → Rules. No forward sent.")
+            await ActivityLog.shared.record(
+                "Rule forward refused — address placeholder/empty",
+                kind: .silo,
+                level: .warn,
+                messageID: message.id
+            )
+            return outcome
+        }
+
+        let folder = FileManager.default.temporaryDirectory
+            .appendingPathComponent("Postmark-forward-\(UUID().uuidString)", isDirectory: true)
+        try? FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
+
+        let savedPaths = await saveAttachments(of: message, into: folder, outcome: &outcome)
+
+        var attachFiles: [(String, String)] = []
+        for att in message.attachments {
+            if let path = savedPaths[att.name] {
+                attachFiles.append((path, att.name))
+            } else {
+                outcome.errors.append("attachment not saved on disk: \(att.name)")
+            }
+        }
+
+        let subject = "Receipt — \(message.subject)"
+        let body = "Auto-forwarded by Postmark. Original sender: \(message.sender)."
+        do {
+            let r = try await MailBridge.executeAppleScript(
+                MailScripts.forwardAttachments(to: target, subject: subject, body: body, attachments: attachFiles)
+            )
+            if r != "SENDOK" {
+                outcome.errors.append("forward: \(r)")
+                await ActivityLog.shared.record("Forward failed: \(r)", kind: .silo, level: .error, messageID: message.id)
+            } else {
+                await ActivityLog.shared.record(
+                    "Forwarded message + \(attachFiles.count) attachment(s) to \(target)",
+                    kind: .silo,
+                    messageID: message.id
+                )
+            }
+        } catch {
+            outcome.errors.append("forward: \(error.localizedDescription)")
+            await ActivityLog.shared.record("Forward error: \(error.localizedDescription)", kind: .silo, level: .error, messageID: message.id)
+        }
+
+        try? FileManager.default.removeItem(at: folder)
+        return outcome
+    }
+
+    /// Save every attachment of a message into `folder`; returns a map of
+    /// filename → saved path for the ones that landed on disk. Errors are
+    /// appended to `outcome.errors`.
+    private func saveAttachments(of message: MailMessage, into folder: URL, outcome: inout Outcome) async -> [String: String] {
+        var savedPaths: [String: String] = [:]
+        do {
+            let raw = try await MailBridge.executeAppleScript(MailScripts.saveAttachments(messageID: message.id, to: folder.path))
+            for line in raw.components(separatedBy: "\n") {
+                let parts = line.split(separator: ":", maxSplits: 2)
+                guard parts.count == 3 else { continue }
+                let name = String(parts[0])
+                let path = String(parts[2])
+                if FileManager.default.fileExists(atPath: path) {
+                    savedPaths[name] = path
+                }
+            }
+            await ActivityLog.shared.record("Saved \(savedPaths.count) attachment\(savedPaths.count == 1 ? "" : "s") for forward", kind: .silo, messageID: message.id)
+        } catch {
+            outcome.errors.append("saveAttachments: \(error.localizedDescription)")
+            await ActivityLog.shared.record("Attachment save failed: \(error.localizedDescription)", kind: .silo, level: .error, messageID: message.id)
+        }
+        return savedPaths
     }
 }

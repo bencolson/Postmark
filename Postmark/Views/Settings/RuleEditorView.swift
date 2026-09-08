@@ -66,7 +66,7 @@ struct RuleEditorView: View {
     // MARK: - Rules
 
     private func rulesSection(_ r: PostmarkRules) -> some View {
-        SectionCard(title: "Rules", subtitle: "Action per category — move, mark read, leave, or draft a reply.") {
+        SectionCard(title: "Rules", subtitle: "Action per category — move, mark read, leave, draft a reply, or forward.") {
             VStack(alignment: .leading, spacing: 12) {
                 ForEach(r.rules.indices, id: \.self) { i in
                     ruleRow(r, index: i)
@@ -130,6 +130,17 @@ struct RuleEditorView: View {
                 .scrollContentBackground(.hidden)
                 .frame(minHeight: 100)
                 .background(RoundedRectangle(cornerRadius: 8).fill(Color.primary.opacity(0.04)))
+            }
+
+            HStack(spacing: 8) {
+                Image(systemName: "paperplane")
+                    .font(.system(size: 10))
+                    .foregroundStyle(.secondary)
+                TextField("Forward message + attachments to (blank = no forward)", text: Binding(
+                    get: { rules?.rules[i].action.forwardTo ?? "" },
+                    set: { rules?.rules[i].action.forwardTo = $0.trimmingCharacters(in: .whitespaces).isEmpty ? nil : $0 }
+                ))
+                .textFieldStyle(.roundedBorder)
             }
         }
         .padding(10)

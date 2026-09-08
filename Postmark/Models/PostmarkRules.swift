@@ -44,6 +44,11 @@ struct Action: Codable {
     var leave: Bool?
     var draftReply: Bool?
     var draftPrompt: String?
+    /// Optional per-rule recipient — when set (non-empty), the whole message
+    /// (body + every attachment) is forwarded to this address as part of the
+    /// rule action. Empty/nil means no forward. Optional so pre-existing rule
+    /// files without the key still decode.
+    var forwardTo: String? = nil
 }
 
 struct FallbackConfig: Codable {
