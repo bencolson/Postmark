@@ -110,16 +110,38 @@ enum MailScripts {
     }
 
     /// Mark a message read by Message-ID.
+    ///
+    /// The inbox is consulted first, then every mailbox of every account. This
+    /// matters because CategoryExecutor moves a message before marking it read —
+    /// once filed (e.g. to "Receipts") it is no longer found via `inbox`, and a
+    /// inbox-only lookup would return NOTFOUND, silently leaving the message
+    /// unread in its destination mailbox.
     static func markRead(messageID: String) -> String {
-        """
+        return """
+        set mid to "\(_escape(messageID))"
         tell application "Mail"
+            set foundMsg to missing value
             try
-                set m to first message of inbox whose message id = "\(_escape(messageID))"
-                set read status of m to true
-                return "OK"
-            on error
-                return "NOTFOUND"
+                set foundMsg to first message of inbox whose message id = mid
             end try
+            if foundMsg is missing value then
+                repeat with a in every account
+                    repeat with mb in every mailbox of a
+                        try
+                            set foundMsg to first message of mb whose message id = mid
+                            exit repeat
+                        end try
+                    end repeat
+                    if foundMsg is not missing value then
+                        exit repeat
+                    end if
+                end repeat
+            end if
+            if foundMsg is not missing value then
+                set read status of foundMsg to true
+                return "OK"
+            end if
+            return "NOTFOUND"
         end tell
         """
     }
