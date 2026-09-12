@@ -181,31 +181,52 @@ enum MailScripts {
 
     /// Save every attachment of a message into a temp folder; returns a newline-
     /// separated list of `filename:size:destPath` triples.
+    ///
+    /// Like `markRead`, the message is looked up in the inbox first, then in
+    /// every mailbox of every account. This matters because the rule executor
+    /// moves a message *before* its forward runs, so by the time attachments are
+    /// saved the message is no longer in the inbox — an inbox-only lookup would
+    /// silently return nothing and the forward would go out empty.
     static func saveAttachments(messageID: String, to folder: String) -> String {
         """
         set dest to "\(_escape(folder))"
         set sep to ":"
         set out to ""
+        set mid to "\(_escape(messageID))"
         tell application "Mail"
+            set foundMsg to missing value
             try
-                set m to first message of inbox whose message id = "\(_escape(messageID))"
-            on error
-                return ""
+                set foundMsg to first message of inbox whose message id = mid
             end try
-            try
-                set attList to every attachment of m
-                repeat with a in attList
-                    set an to name of a
-                    set asz to size of a
-                    set ap to dest & "/" & an
-                    try
-                        save a in (POSIX file dest) as alias
-                    on error
-                        save a in (POSIX file dest)
-                    end try
-                    set out to out & an & sep & asz & sep & ap & return
+            if foundMsg is missing value then
+                repeat with acc in every account
+                    repeat with mbx in every mailbox of acc
+                        try
+                            set foundMsg to first message of mbx whose message id = mid
+                            exit repeat
+                        end try
+                    end repeat
+                    if foundMsg is not missing value then
+                        exit repeat
+                    end if
                 end repeat
-            end try
+            end if
+            if foundMsg is not missing value then
+                try
+                    set attList to every attachment of foundMsg
+                    repeat with a in attList
+                        set an to name of a
+                        set asz to size of a
+                        set ap to dest & "/" & an
+                        try
+                            save a in (POSIX file dest) as alias
+                        on error
+                            save a in (POSIX file dest)
+                        end try
+                        set out to out & an & sep & asz & sep & ap & return
+                    end repeat
+                end try
+            end if
         end tell
         return out
         """
