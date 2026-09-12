@@ -4,18 +4,16 @@
 <dict>
 	<!-- MailKit requires the extension to be sandboxed; without this key the
 	     sandbox loader refuses the appex outright (it was empty before, which
-	     is why Mail never invoked decideAction). -->
+	     is why Mail never invoked decideAction). Do NOT add
+	     com.apple.security.application-groups here: with Xcode 26 that
+	     entitlement forces a team provisioning profile (Apple-issued) that
+	     this Developer-ID setup does not have, and the signed Xcode build
+	     fails in GatherProvisioningInputs. The official Mail Extension
+	     template ships with app-sandbox only. -->
 	<key>com.apple.security.app-sandbox</key>
 	<true/>
 </dict>
-</plist>[Dict]
-	[Key] com.apple.security.app-sandbox
-	[Value]
-		[Bool] true
-[Dict]
-	[Key] com.apple.security.app-sandbox
-	[Value]
-		[Bool] true
+</plist>
 [Dict]
 	[Key] com.apple.security.app-sandbox
 	[Value]
