@@ -59,7 +59,16 @@ final class SiloForwarder {
             }
         }
 
-        guard !attachFiles.isEmpty else { return outcome }
+        guard !attachFiles.isEmpty else {
+            await ActivityLog.shared.record(
+                "Silo forward skipped — eligible document attachment(s) failed to save on disk",
+                kind: .silo,
+                level: .warn,
+                messageID: message.id
+            )
+            try? FileManager.default.removeItem(at: folder)
+            return outcome
+        }
 
         let subject = "Production docs — \(message.subject)"
         let body = "Auto-forwarded by Postmark. Original sender: \(message.sender)."
@@ -118,6 +127,21 @@ final class SiloForwarder {
             } else {
                 outcome.errors.append("attachment not saved on disk: \(att.name)")
             }
+        }
+
+        // Never send an empty shell when the source message had attachments.
+        // Without this, a failed save would silently forward a body-only stub
+        // to Hubdoc, which is exactly the "missing attachments" report.
+        if !message.attachments.isEmpty && attachFiles.isEmpty {
+            outcome.errors.append("0/\(message.attachments.count) attachment(s) saved on disk — forward skipped, no empty message sent")
+            await ActivityLog.shared.record(
+                "Forward skipped — 0/\(message.attachments.count) attachment(s) saved (no empty message sent)",
+                kind: .silo,
+                level: .warn,
+                messageID: message.id
+            )
+            try? FileManager.default.removeItem(at: folder)
+            return outcome
         }
 
         let subject = "Receipt — \(message.subject)"
