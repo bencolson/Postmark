@@ -6,7 +6,7 @@ import SwiftUI
 final class SettingsStore: ObservableObject {
     private let keychain = KeychainService()
 
-    @AppStorage("litellmBaseURL") var litellmBaseURL: String = "http://localhost:4000/v1"
+    @AppStorage("litellmBaseURL") var litellmBaseURL: String = "http://127.0.0.1:4000/v1"
     @AppStorage("litellmModel") var litellmModel: String = "openrouter/laguna-s-2.1"
     @AppStorage("quietHoursEnabled") var quietHoursEnabled: Bool = false
 

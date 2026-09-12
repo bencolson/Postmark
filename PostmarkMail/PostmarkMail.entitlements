@@ -2,5 +2,21 @@
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
 <dict>
+	<!-- MailKit requires the extension to be sandboxed; without this key the
+	     sandbox loader refuses the appex outright (it was empty before, which
+	     is why Mail never invoked decideAction). -->
+	<key>com.apple.security.app-sandbox</key>
+	<true/>
 </dict>
-</plist>
+</plist>[Dict]
+	[Key] com.apple.security.app-sandbox
+	[Value]
+		[Bool] true
+[Dict]
+	[Key] com.apple.security.app-sandbox
+	[Value]
+		[Bool] true
+[Dict]
+	[Key] com.apple.security.app-sandbox
+	[Value]
+		[Bool] true

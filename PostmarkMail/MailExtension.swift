@@ -9,8 +9,8 @@ import MailKit
 
 /// MailKit message-action extension. It performs NO Mail actions by design —
 /// the daemon owns triage. It only signals the arrival of new mail to the
-/// Postmark daemon via a best-effort DistributedNotificationCenter poke and an
-/// App Group message-ID ring, so the daemon can run an earlier, rate-limited
+/// Postmark daemon via a signal file Mail's container (see
+/// `MessageActionHandler`), so the daemon can run an earlier, rate-limited
 /// poll. The 15-minute poll is the source of truth; a dropped signal is always
 /// caught by it.
 class MailExtension: NSObject, MEExtension {

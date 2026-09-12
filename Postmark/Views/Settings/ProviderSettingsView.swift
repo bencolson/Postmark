@@ -5,7 +5,7 @@ import SwiftUI
 struct ProviderSettingsView: View {
     @EnvironmentObject var settingsStore: SettingsStore
 
-    @State private var litellmBaseURL: String = "http://localhost:4000/v1"
+    @State private var litellmBaseURL: String = "http://127.0.0.1:4000/v1"
     @State private var litellmModel: String = "openrouter/laguna-s-2.1"
     @State private var savedMessage: String?
 
@@ -13,7 +13,7 @@ struct ProviderSettingsView: View {
         Form {
             Section {
                 LabeledContent("Base URL") {
-                    TextField("http://localhost:4000/v1", text: $litellmBaseURL)
+                    TextField("http://127.0.0.1:4000/v1", text: $litellmBaseURL)
                         .textFieldStyle(.roundedBorder)
                         .frame(width: 260)
                 }
@@ -69,7 +69,7 @@ struct ProviderSettingsView: View {
 
     private func load() {
         if let rules = RulesStore.shared.load() {
-            litellmBaseURL = rules.provider.baseURL ?? "http://localhost:4000/v1"
+            litellmBaseURL = rules.provider.baseURL ?? "http://127.0.0.1:4000/v1"
             litellmModel = rules.provider.model
         }
     }

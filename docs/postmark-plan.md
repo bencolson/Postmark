@@ -35,7 +35,7 @@ All other decisions below are locked from your infra context. The execution mode
 - **Classifiers**: one **message classifier** (→ category) and one **attachment classifier** (→ document type). Both via streaming LLM calls using the existing `AIClient` protocol; both editable as custom prompts.
 - **Document categories (forward targets)**: `Call Sheets`, `Movement Orders`, `Risk Assessments`, `Storyboards`, `Treatments`, `Specs`, `Other`, `skip` (the n8n set). Forwardable ones are sent to Silo inbound email; `skip` and non-production types are left alone.
 - **Silo inbound target**: a single production delivery address — any full email on `mail.silo.day` (e.g. `<token>@mail.silo.day`) — set in Settings → Silo and stored in the Keychain. The Silo server-side `InboundEmailWebhookController` already files by shoot date / links Job / runs Gemini extraction — Postmark owns only the client leg (detect → forward). No backend changes, but rely on its logs/metrics for feedback (forward failures surface as macOS notifications). **See §Secure rule file handling: the real address is never in the repo.**
-- **Providers**: base six + a new **LiteLLM proxy** provider (OpenAI-compatible base URL = `http://localhost:4000/v1`, key from Keychain) so the existing Glimmer local + OpenRouter cloud-fallback chain works transparently. This is the provider most aligned with your infra.
+- **Providers**: base six + a new **LiteLLM proxy** provider (OpenAI-compatible base URL = `http://127.0.0.1:4000/v1`, key from Keychain) so the existing Glimmer local + OpenRouter cloud-fallback chain works transparently. This is the provider most aligned with your infra.
 - **Rule file**: single `PostmarkRules.json` in the app's support dir, human-readable, `git`-committable, hand-edit-safe. Schema is JSON Schema-validated on load. The GUI writes it atomically.
 - **Packaging**: SwiftPM Build + an Xcode project for `⌘R`; release via `make dmg` + **Sparkle** for in-place auto-update; releases published to GitHub `bencolson/Postmark`. MIT license (inherits base repo).
 
@@ -88,7 +88,7 @@ Notes:
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "version": 1,
   "polling": { "intervalMinutes": 15, "daysWindow": 7 },
-  "provider": { "type": "litellm", "baseURL": "http://localhost:4000/v1", "model": "openrouter/laguna-s-2.1" },
+  "provider": { "type": "litellm", "baseURL": "http://127.0.0.1:4000/v1", "model": "openrouter/laguna-s-2.1" },
   "classifier": {
     "prompt": "<single LLM prompt that classifies an email into one of the message rule ids below; return exactly the id token or empty>"
   },
@@ -149,7 +149,7 @@ Notes:
 - **G1**: Postmark classifies a held-out batch of 50 real unread messages **identically (same message category) to n8n's last clean run** — using n8n's ported `email-categorisation` prompt (G0). Replay log of last 3 days.
 - **G2**: A call sheet forwarded by Postmark (against the **dev** Silo inbound address, never prod during testing) appears in Silo at the right `<shoot-date ymd>/` folder, Job-linked, Gemini-extracted, within Silo's normal SLA. Verify via Silo dev `InboundEmailWebhookController` log + the Dropbox tree. Gating the test forward at the dev address is itself a validation of the §runtime guard.
 - **G3**: Cooldown log prevents re-triage within TTL; `Message-ID` dedup matches n8n's old Redis behavior within 1h granularity.
-- **G4**: `make dmg` produces an unnotarized-valid app; `make run` launches menu-bar app; settings window saves a LiteLLM key+URL and one streaming classification completes against `localhost:4000`.
+- **G4**: `make dmg` produces an unnotarized-valid app; `make run` launches menu-bar app; settings window saves a LiteLLM key+URL and one streaming classification completes against `127.0.0.1:4000`.
 - **G5**: Rollout shadow-mode diff (Postmark vs n8n) over a 48h window shows ≤2 divergences on >200 messages.
 
 ## Secure rule-file handling (the Silo token)

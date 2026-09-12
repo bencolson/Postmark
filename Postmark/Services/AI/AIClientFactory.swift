@@ -17,7 +17,7 @@ struct ProviderSpec: Codable, Equatable {
             case .openai:        return "https://api.openai.com/v1"
             case .openrouter:    return "https://openrouter.ai/api/v1"
             case .trustedtokens: return "https://api.trustedtokens.eu/v1"
-            case .local:         return "http://localhost:1234/v1"
+            case .local:         return "http://127.0.0.1:1234/v1"
             default:             return ""
             }
         }
@@ -41,7 +41,7 @@ enum AIClientFactory {
                 // opaque 'No connected db' 400 (empty key → anonymous → DB lookup).
                 throw AIClientError.missingAPIKey("LiteLLM")
             }
-            return OpenAIClient(baseURL: spec.resolvedBaseURL.isEmpty ? "http://localhost:4000/v1" : spec.resolvedBaseURL,
+            return OpenAIClient(baseURL: spec.resolvedBaseURL.isEmpty ? "http://127.0.0.1:4000/v1" : spec.resolvedBaseURL,
                                 apiKey: key, model: spec.model, provider: .litellm)
         case .openai:
             return try selfClient(spec, provider: .openai, keychain: keychain)

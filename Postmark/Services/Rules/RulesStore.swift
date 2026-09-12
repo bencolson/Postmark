@@ -35,7 +35,7 @@ final class RulesStore {
             provider: ProviderSpec(
                 type: "litellm",
                 model: "openrouter/laguna-s-2.1",
-                baseURL: "http://localhost:4000/v1"
+                baseURL: "http://127.0.0.1:4000/v1"
             ),
             classifier: ClassifierConfig(
                 prompt: "You are a mail triage assistant. Classify the email into exactly one category: lead, receipt, low-priority, other. Reply with only the category word."
