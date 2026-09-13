@@ -39,3 +39,6 @@ PostmarkRules.json
 Postmark/Resources/PostmarkRules.json
 # Local app-state (cooldown log, digests)
 Application Support/
+# Per-developer release config; never commit credentials or identities
+Makefile.local
+*.env

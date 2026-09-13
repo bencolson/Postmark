@@ -1,0 +1,26 @@
+# Makefile.local — per-developer release config. This file is gitignored and
+# MUST NOT be committed: it is the only place Developer ID / Apple ID values
+# live outside the Makefile. Secrets (the notary app-specific password) are
+# stored in the macOS keychain by `make notary-login`, never in a file.
+#
+# Usage:
+#   1. cp Makefile.local.example Makefile.local   (or `make setup`)
+#   2. Fill in SIGNING_IDENTITY and TEAM_ID below
+#   3. make notary-login   (prompts for the app-specific password once)
+#   4. make release-dmg    (build → sign → notarize → DMG → notarize DMG)
+
+# Your Developer ID identity, exactly as shown in Keychain Access →
+# "My Certificates", e.g.:
+#   SIGNING_IDENTITY = Developer ID Application: Jane Doe (ABCDE12345)
+# Use NO surrounding quotes (the Makefile quotes it where needed).
+SIGNING_IDENTITY =
+
+# Your Apple Developer team ID (the 10-char code in the identity above).
+TEAM_ID =
+
+# Apple ID email for notarization (used only by `make notary-login`).
+APPLE_ID =
+
+# Name of the notarytool keychain profile (default PostmarkNotary).
+# Only referenced; the actual credential stays in the keychain.
+#KEYCHAIN_PROFILE = PostmarkNotary

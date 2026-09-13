@@ -6,14 +6,23 @@ BUILD_DIR = build
 APP_BUNDLE = $(BUILD_DIR)/$(APP_NAME).app
 EXECUTABLE = $(APP_BUNDLE)/Contents/MacOS/$(BUNDLE_NAME)
 ICONSET = Postmark/Resources/Assets.xcassets/AppIcon.appiconset
+# Release/distribution config. Never commit credentials to this repo:
+# * Developer ID + team id live in Makefile.local (gitignored).
+# * The notary password / API key is stored in the macOS keychain ONLY, via
+#   `make notary-login` (profiles are named, never value-bearing here).
+#   See Makefile.local.example.
+-include Makefile.local
+
 # Set to your Developer ID for distribution, or leave empty for ad-hoc
 SIGNING_IDENTITY ?=
 # Set to your Apple ID for notarization
 APPLE_ID ?=
 TEAM_ID ?=
+# notarytool keychain profile (created by `make notary-login`)
+KEYCHAIN_PROFILE ?= PostmarkNotary
 SPARKLE_PRIV_KEY ?=
 
-.PHONY: build run clean release dmg sign notarize release-dmg install uninstall render-icon appcast test
+.PHONY: build run clean release dmg sign notarize release-dmg install uninstall render-icon appcast test setup notary-login
 
 # Render the app icon slices from scripts/render-icon.swift. No-op when slices
 # are already newer than the script.
@@ -106,66 +115,73 @@ release: render-icon
 	@/usr/libexec/PlistBuddy -c "Add :NSPrincipalClass string NSApplication" "$(APP_BUNDLE)/Contents/Info.plist" 2>/dev/null || true
 	@echo "\n✅ Release built: $(APP_BUNDLE)"
 
-# Code sign (for distribution outside App Store)
-sign: release
-	@if [ -z "$(SIGNING_IDENTITY)" ]; then \
-		echo "⚠️  No SIGNING_IDENTITY set. Ad-hoc signing..."; \
-		codesign --force --deep --sign - \
-			--entitlements Postmark/Entitlements/Postmark.entitlements \
-			"$(APP_BUNDLE)"; \
+# One-time local config. Creates Makefile.local from the example (gitignored,
+# no secrets: notary credentials live in the keychain, not in files).
+setup:
+	@if [ ! -f Makefile.local ]; then \
+		cp Makefile.local.example Makefile.local; \
+		echo "✅ Created Makefile.local — edit SIGNING_IDENTITY + TEAM_ID, then run: make notary-login"; \
 	else \
-		echo "Signing with: $(SIGNING_IDENTITY)"; \
-		codesign --force --deep --options runtime \
-			--sign "$(SIGNING_IDENTITY)" \
-			--entitlements Postmark/Entitlements/Postmark.entitlements \
-			"$(APP_BUNDLE)"; \
+		echo "Makefile.local already exists."; \
 	fi
-	@echo "✅ Signed: $(APP_BUNDLE)"
 
-# Notarize (requires Apple Developer account)
+# Store notary credentials in the macOS keychain. You will be prompted for your
+# Apple ID app-specific password — it is never written to the repo or to
+# Makefile.local; only the named profile (KEYCHAIN_PROFILE) is referenced.
+notary-login:
+	@test -n "$(APPLE_ID)" || { echo "❌ Set APPLE_ID in Makefile.local (copy from Makefile.local.example)"; exit 1; }
+	@test -n "$(TEAM_ID)" || { echo "❌ Set TEAM_ID in Makefile.local"; exit 1; }
+	@echo "Storing notary credentials in the keychain as '$(KEYCHAIN_PROFILE)'…"
+	xcrun notarytool store-credentials "$(KEYCHAIN_PROFILE)" --apple-id "$(APPLE_ID)" --team-id "$(TEAM_ID)"
+	@echo "✅ Credentials stored. Now run: make release-dmg"
+
+# Code sign (for distribution outside App Store). Xcode does the signing so
+# EVERY component — including the PostmarkMail.appex — gets its own
+# entitlements and hardened runtime (--deep re-signing would stamp the appex
+# with the daemon's entitlements and break notarization).
+sign:
+	@test -n "$(SIGNING_IDENTITY)" || { echo "❌ SIGNING_IDENTITY unset — put it in Makefile.local (see Makefile.local.example)"; exit 1; }
+	@test -n "$(TEAM_ID)" || { echo "❌ TEAM_ID unset — put it in Makefile.local"; exit 1; }
+	xcodebuild -project $(BUNDLE_NAME).xcodeproj -scheme $(BUNDLE_NAME) \
+		-configuration Release -destination 'generic/platform=macOS' \
+		-derivedDataPath $(BUILD_DIR)/DerivedData \
+		ARCHS="arm64 x86_64" ONLY_ACTIVE_ARCH=NO \
+		CODE_SIGNING_ALLOWED=YES CODE_SIGNING_REQUIRED=YES \
+		CODE_SIGN_IDENTITY="$(SIGNING_IDENTITY)" DEVELOPMENT_TEAM="$(TEAM_ID)" \
+		ENABLE_HARDENED_RUNTIME=YES \
+		build
+	@rm -rf "$(APP_BUNDLE)"
+	@mkdir -p "$(APP_BUNDLE)"
+	@cp -R "$(BUILD_DIR)/DerivedData/Build/Products/Release/$(BUNDLE_NAME).app/." "$(APP_BUNDLE)/"
+	@cp Postmark/Resources/PostmarkRules.json.template "$(APP_BUNDLE)/Contents/Resources/" 2>/dev/null || true
+	@codesign --verify --deep --strict "$(APP_BUNDLE)" && echo "✅ Signed + verified: $(APP_BUNDLE)"
+
+# Notarize (requires Apple Developer account + `make notary-login` once).
 notarize: sign
-	@if [ -n "$(APPLE_ID)" ] && [ -n "$(TEAM_ID)" ]; then \
-		echo "Creating ZIP for notarization..."; \
-		ditto -c -k --keepParent "$(APP_BUNDLE)" "$(BUILD_DIR)/$(BUNDLE_NAME).zip"; \
-		if [ -n "$(KEYCHAIN_PROFILE)" ]; then \
-			xcrun notarytool submit "$(BUILD_DIR)/$(BUNDLE_NAME).zip" \
-				--keychain-profile "$(KEYCHAIN_PROFILE)" --wait; \
-		else \
-			xcrun notarytool submit "$(BUILD_DIR)/$(BUNDLE_NAME).zip" \
-				--apple-id "$(APPLE_ID)" --team-id "$(TEAM_ID)" \
-				--password "$(APP_PASSWORD)" --wait; \
-		fi; \
-		xcrun stapler staple "$(APP_BUNDLE)"; \
-		echo "✅ Notarized and stapled: $(APP_BUNDLE)"; \
-	else \
-		echo "⚠️  Set APPLE_ID, TEAM_ID, and APP_PASSWORD (or KEYCHAIN_PROFILE) to notarize"; \
-		echo "   Recommended: xcrun notarytool store-credentials AC_PASSWORD --apple-id ... --team-id ... --password ..."; \
-	fi
+	@xcrun notarytool history --keychain-profile "$(KEYCHAIN_PROFILE)" >/dev/null 2>&1 || { echo "❌ keychain profile '$(KEYCHAIN_PROFILE)' not found — run: make notary-login"; exit 1; }
+	@echo "Creating ZIP for notarization…"
+	@rm -f "$(BUILD_DIR)/$(BUNDLE_NAME).zip"
+	ditto -c -k --keepParent "$(APP_BUNDLE)" "$(BUILD_DIR)/$(BUNDLE_NAME).zip"
+	xcrun notarytool submit "$(BUILD_DIR)/$(BUNDLE_NAME).zip" --keychain-profile "$(KEYCHAIN_PROFILE)" --wait
+	xcrun stapler staple "$(APP_BUNDLE)"
+	@spctl -a -vv "$(APP_BUNDLE)"
+	@echo "✅ Notarized and stapled: $(APP_BUNDLE)"
 
-# Create DMG for distribution
+# Create DMG for distribution (from the signed app)
 dmg: sign
 	@rm -f "$(BUILD_DIR)/$(BUNDLE_NAME).dmg"
 	./scripts/create-dmg.sh "$(APP_NAME)" "$(APP_BUNDLE)" "$(BUILD_DIR)/$(BUNDLE_NAME).dmg"
 	@echo "✅ DMG created: $(BUILD_DIR)/$(BUNDLE_NAME).dmg"
 
-# Full distribution: sign → notarize → staple → DMG → sign DMG → notarize DMG
+# Full distribution: sign → notarize+staple app → DMG → sign DMG → notarize+staple DMG
 release-dmg: notarize
+	@test -n "$(SIGNING_IDENTITY)" || { echo "❌ SIGNING_IDENTITY unset — see Makefile.local.example"; exit 1; }
 	@rm -f "$(BUILD_DIR)/$(BUNDLE_NAME).dmg"
 	./scripts/create-dmg.sh "$(APP_NAME)" "$(APP_BUNDLE)" "$(BUILD_DIR)/$(BUNDLE_NAME).dmg"
-	@if [ -n "$(SIGNING_IDENTITY)" ]; then \
-		codesign --force --sign "$(SIGNING_IDENTITY)" "$(BUILD_DIR)/$(BUNDLE_NAME).dmg"; \
-		if [ -n "$(KEYCHAIN_PROFILE)" ]; then \
-			xcrun notarytool submit "$(BUILD_DIR)/$(BUNDLE_NAME).dmg" \
-				--keychain-profile "$(KEYCHAIN_PROFILE)" --wait; \
-		else \
-			xcrun notarytool submit "$(BUILD_DIR)/$(BUNDLE_NAME).dmg" \
-				--apple-id "$(APPLE_ID)" --team-id "$(TEAM_ID)" \
-				--password "$(APP_PASSWORD)" --wait; \
-		fi; \
-		xcrun stapler staple "$(BUILD_DIR)/$(BUNDLE_NAME).dmg"; \
-	elif [ -z "$(APPLE_ID)" ]; then \
-		echo "⚠️  No SIGNING_IDENTITY/APPLE_ID set — DMG notarization skipped"; \
-	fi
+	codesign --force --options runtime --sign "$(SIGNING_IDENTITY)" "$(BUILD_DIR)/$(BUNDLE_NAME).dmg"
+	xcrun notarytool submit "$(BUILD_DIR)/$(BUNDLE_NAME).dmg" --keychain-profile "$(KEYCHAIN_PROFILE)" --wait
+	xcrun stapler staple "$(BUILD_DIR)/$(BUNDLE_NAME).dmg"
+	@spctl -a -vv --type open --context context:primary-signature "$(BUILD_DIR)/$(BUNDLE_NAME).dmg"
 	@echo "✅ Distribution-ready DMG: $(BUILD_DIR)/$(BUNDLE_NAME).dmg"
 
 # Build and run
