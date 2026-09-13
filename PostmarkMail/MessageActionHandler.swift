@@ -23,10 +23,12 @@ import MailKit
 /// Mail action.
 class MessageActionHandler: NSObject, MEMessageActionHandler {
 
-    /// Relative to the sandbox home. From inside Mail's container, home IS
-    /// `~/Library/Containers/com.apple.mail/Data`, so this resolves to
-    /// `.../Data/Library/Postmark/signals.txt` — the path the daemon watches.
-    static let signalFilePath = "Library/Postmark/signals.txt"
+    /// Relative target for the signal file. The appex is sandboxed and cannot
+    /// write anywhere outside its own container; `.documentDirectory` resolves,
+    /// inside the sandbox, to `~/Library/Containers/
+    /// ltd.colson.postmark.PostmarkMail/Data/Documents/` — the exact absolute
+    /// path the daemon's TriageTrigger constructs from the real home.
+    static let signalFileName = "postmark-signal.txt"
 
     var requiredHeaders: [String] {
         // Mail lowercases the header names it fetches for the handler.
@@ -47,12 +49,13 @@ class MessageActionHandler: NSObject, MEMessageActionHandler {
         completionHandler(nil)
     }
 
-    /// Stamp `signals.txt` with `<unixEpoch>\n<messageID>\n`. Best-effort: a
+    /// Stamp the signal file with `<unixEpoch>\n<messageID>\n`. Best-effort: a
     /// failed write only delays the daemon's next scheduled poll.
     private func writeSignal(messageID: String) {
-        guard let library = FileManager.default.urls(for: .libraryDirectory, in: .userDomainMask).first else { return }
-        let url = library.deletingLastPathComponent().appendingPathComponent(Self.signalFilePath)
-        try? FileManager.default.createDirectory(at: url.deletingLastPathComponent(), withIntermediateDirectories: true)
+        guard let documents = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask).first,
+              documents.path.hasSuffix("/Documents")
+        else { return }
+        let url = documents.appendingPathComponent(Self.signalFileName)
         let stamp = Int(Date().timeIntervalSince1970)
         let safeID = messageID
             .replacingOccurrences(of: "\"", with: " ")

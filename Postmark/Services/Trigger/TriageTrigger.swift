@@ -14,8 +14,11 @@ import Foundation
 @MainActor
 final class TriageTrigger {
     /// Absolute path of the signal file the appex stamps, relative to the
-    /// daemon's own home (non-sandboxed, so it is the real home directory).
-    static let signalFilePath = "Library/Containers/com.apple.mail/Data/Library/Postmark/signals.txt"
+    /// daemon's own home. The appex is sandboxed into its own container, so
+    /// its `.documentDirectory` maps to
+    /// `~/Library/Containers/ltd.colson.postmark.PostmarkMail/Data/Documents/`
+    /// — the one place it can write that both processes resolve identically.
+    static let signalFilePath = "Library/Containers/ltd.colson.postmark.PostmarkMail/Data/Documents/postmark-signal.txt"
 
     private let coordinator: TriageCoordinator
     private var watcherTimer: Timer?
