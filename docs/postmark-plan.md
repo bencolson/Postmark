@@ -175,3 +175,25 @@ Notes:
 
 ## Open question (blocks implementation)
 None outstanding. Execution model is locked (background daemon + menu-bar config/settings). Remaining confirm-before-coding details are marked inline in the plan (e.g. verify mac-data-api `/mail/send`/`/mail/draft`/`/mail/callsheet` consumers before deleting the retired family; shadow-mode diff criteria G5).
+
+## MailKit extension: BLOCKED by macOS 26.5 (verified 2026-09-13)
+
+The `PostmarkMail` MEMessageActionHandler appex **cannot run on macOS 26.5**
+(Tahoe): every launch is killed by a Swift `fatalError` inside ExtensionFoundation
+at the identical instruction (`EXC_BREAKPOINT` at
+`+[EXConcreteExtensionContextVendor _extensionContextClass]_block_invoke`,
+address `0x2329a66b8`, 27+ crash logs since 2026-09-09).
+
+Proven **not** our appex, Info.plist (matches Apple's Mail Extension template /
+WWDC21 sample shape), code, or signing: the trap is byte-identical across
+ad-hoc, Developer ID, and **notarized** builds (last verified on the notarized
+`0.2.0` distribution submitted 2026-09-13, notary id `00e59725`-family). The
+appex never runs a single line of Postmark code (no Postmark frames in any
+crash).
+
+The fast-path design (appex pokes `…PostmarkMail/Data/Documents/postmark-signal.txt`;
+daemon's TriageTrigger watches it) remains intact and works IF MailKit ever
+invokes `decideAction` — the blocker is the OS, not the handshake. The 5-minute
+poll (`polling.intervalMinutes`) is the production signal path until this is
+resolved (likely an Apple fix or a future macOS). Do not sink more time into
+the extension without a repro on a working macOS version.
