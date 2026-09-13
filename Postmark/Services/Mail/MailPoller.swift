@@ -10,11 +10,9 @@ final class MailPoller {
     func poll(daysWindow: Int, unreadOnly: Bool = true) async throws -> [MailMessage] {
         await ActivityLog.shared.record("Polling inbox (window \(daysWindow)d, \(unreadOnly ? "unread only" : "all messages")", kind: .poll, level: .debug)
         // Surface the real error (e.g. a denied Automation permission) rather
-        // than collapsing it into "Mail is not running".
-        let check = try await MailBridge.executeAppleScript(MailScripts.checkMailRunning, timeout: 10)
-        guard check.trimmingCharacters(in: .whitespacesAndNewlines).lowercased() == "true" else {
-            throw MailBridgeError.mailNotRunning
-        }
+        // than collapsing it into "Mail is not running". In-process probe, not
+        // AppleScript — the System Events check it replaced was flaky.
+        guard MailBridge.isMailRunning() else { throw MailBridgeError.mailNotRunning }
         let raw = try await MailBridge.executeAppleScript(MailScripts.listInbox(daysWindow: daysWindow, unreadOnly: unreadOnly))
         let messages = parse(raw)
         await ActivityLog.shared.record("Polled \(messages.count) message\(messages.count == 1 ? "" : "s")", kind: .poll)

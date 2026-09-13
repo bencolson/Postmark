@@ -279,12 +279,6 @@ enum MailScripts {
     /// NOTE: char(id 10/13) handling keeps AppleScript strings single-line for the
     /// `NSAppleScript(source:)` construction. FS/RS are stripped so the list
     /// delimiter scheme in `listUnreadInbox` stays intact.
-    static let checkMailRunning = """
-    tell application "System Events"
-        return (name of processes) contains "Mail"
-    end tell
-    """
-
     static func escapeAppleScript(_ s: String) -> String {
         var out = s
         out = out.replacingOccurrences(of: fsString, with: " ")

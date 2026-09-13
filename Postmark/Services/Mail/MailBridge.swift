@@ -66,15 +66,13 @@ final class MailBridge {
         }
     }
 
-    /// Lightweight Mail liveness probe; fails fast so a denied Automation
-    /// permission surfaces as a poll warning instead of a silent hang.
-    static func isMailRunning() async -> Bool {
-        do {
-            let result = try await executeAppleScript(MailScripts.checkMailRunning, timeout: 10)
-            return result.trimmingCharacters(in: .whitespacesAndNewlines).lowercased() == "true"
-        } catch {
-            return false
-        }
+    /// In-process Mail liveness probe — no AppleScript, no TCC automation to
+    /// System Events. The old `tell application "System Events"` check
+    /// intermittently failed with Apple Events errors ("Connection is invalid",
+    /// "-609 Application isn't running") when System Events was flaky/denied,
+    /// which surfaced as a raw script error instead of mailNotRunning.
+    static func isMailRunning() -> Bool {
+        !NSRunningApplication.runningApplications(withBundleIdentifier: "com.apple.mail").isEmpty
     }
 
     @MainActor
