@@ -129,13 +129,15 @@ final class SiloForwarder {
             }
         }
 
-        // Never send an empty shell when the source message had attachments.
-        // Without this, a failed save would silently forward a body-only stub
-        // to Hubdoc, which is exactly the "missing attachments" report.
-        if !message.attachments.isEmpty && attachFiles.isEmpty {
-            outcome.errors.append("0/\(message.attachments.count) attachment(s) saved on disk — forward skipped, no empty message sent")
+        // Never send an empty shell. A receipt forward with zero attachments is
+        // a useless body-only stub (the reported "no content / no attachments"
+        // spam). Skip whenever nothing was saved to disk, regardless of whether
+        // the message reported attachments — saveAttachments can return empty
+        // even when it believed there were some.
+        guard !attachFiles.isEmpty else {
+            outcome.errors.append("0 attachment(s) saved on disk — receipt forward skipped, no empty message sent")
             await ActivityLog.shared.record(
-                "Forward skipped — 0/\(message.attachments.count) attachment(s) saved (no empty message sent)",
+                "Forward skipped — 0 attachment(s) saved (no empty message sent)",
                 kind: .silo,
                 level: .warn,
                 messageID: message.id
