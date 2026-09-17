@@ -176,25 +176,26 @@ Notes:
 ## Open question (blocks implementation)
 None outstanding. Execution model is locked (background daemon + menu-bar config/settings). Remaining confirm-before-coding details are marked inline in the plan (e.g. verify mac-data-api `/mail/send`/`/mail/draft`/`/mail/callsheet` consumers before deleting the retired family; shadow-mode diff criteria G5).
 
-## MailKit extension: BLOCKED on macOS 26.6.2 (verified 2026-09-13)
+## MailKit extension: RESOLVED 2026-09-17 (was blocked on macOS 26.6.2)
 
-The `PostmarkMail` MEMessageActionHandler appex **cannot run on macOS 26.6.2**
-(build 25G83 — the machine that produces these logs; recorded in each crash's
-`osVersion` field): every launch is killed by a Swift `fatalError` inside
-ExtensionFoundation at the identical instruction (`EXC_BREAKPOINT` at
-`+[EXConcreteExtensionContextVendor _extensionContextClass]_block_invoke`,
-address `0x2329a66b8`, 27+ crash logs since 2026-09-09).
+The `PostmarkMail` appex crashed at ExtensionFoundation bootstrap
+(`EXConcreteExtensionContextVendor._extensionContextClass`, EXC_BREAKPOINT
+0x2329a66b8) on **Xcode-compiled** appexes — every build (Debug + Release,
+ad-hoc / Developer ID / notarized), 30+ crash logs since 2026-09-09. The trap
+fired before `decideAction`, so no Postmark code ever ran, and it looked like
+an OS/MailKit defect.
 
-Proven **not** our appex, Info.plist (matches Apple's Mail Extension template /
-WWDC21 sample shape), code, or signing: the trap is byte-identical across
-ad-hoc, Developer ID, and **notarized** builds (verified on the notarized
-`0.2.0` distribution submitted 2026-09-13). The appex never runs a single line
-of Postmark code (no Postmark frames in any crash).
+Root cause found by bisection (trivial appex with the same Info.plist and
+bundle id compiled via bare `swiftc` loaded and fired `decideAction` fine):
+the **Swift class metadata emitted by Xcode's build settings** trips
+ExtensionFoundation's class-finalization check. Compiling the identical
+sources with bare `swiftc` (no Xcode flags) works — verified end-to-end:
+signal file written, `Trigger: MailKit signal`, triage run.
 
-Not yet proven: whether the trap is paradigm-wide (any `MEMessageActionHandler`
-appex) or specific to something in this appex's shape — a control appex test
-(pending) distinguishes those. Until then treat it as blocked; the fast-path
-design (appex pokes `…PostmarkMail/Data/Documents/postmark-signal.txt`; daemon's
-TriageTrigger watches it) remains intact and works IF MailKit ever invokes
-`decideAction`. The 5-minute poll (`polling.intervalMinutes`) is the production
-signal path until this is resolved (likely an Apple fix or a future macOS).
+Durable fix: `scripts/build-mailkit-appex.sh` rebuilds the appex executable
+with the proven bare-`swiftc` recipe, and the Makefile `build`/`release`/
+`sign` targets swap it in and re-seal (appex + parent bundle) so every
+artifact — dev and notarized DMG — carries the working appex. Do not let
+xcodebuild produce the appex executable (edit the target settings only if
+the exact flag is ever isolated; the ready recipe in the script is
+canonical).

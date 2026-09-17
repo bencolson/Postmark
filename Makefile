@@ -62,6 +62,9 @@ build: render-icon
 	@codesign --force --sign - \
 		--entitlements Postmark/Entitlements/Postmark.entitlements \
 		"$(EXECUTABLE)"
+	@bash scripts/build-mailkit-appex.sh "$(APP_BUNDLE)/Contents/PlugIns/PostmarkMail.appex"
+	@codesign --force --sign - --entitlements PostmarkMail/PostmarkMail.entitlements \
+		"$(APP_BUNDLE)/Contents/PlugIns/PostmarkMail.appex"
 	@cp "$(BUILD_DIR)/DerivedData/Build/Products/Debug/$(BUNDLE_NAME).app/Contents/Resources/AppIcon.icns" "$(APP_BUNDLE)/Contents/Resources/" 2>/dev/null || true
 	@cp Postmark/Resources/PostmarkRules.json.template "$(APP_BUNDLE)/Contents/Resources/" 2>/dev/null || true
 	@cp Postmark/App/Info.plist "$(APP_BUNDLE)/Contents/Info.plist"
@@ -99,6 +102,9 @@ release: render-icon
 	@codesign --force --sign - \
 		--entitlements Postmark/Entitlements/Postmark.entitlements \
 		"$(EXECUTABLE)"
+	@bash scripts/build-mailkit-appex.sh "$(APP_BUNDLE)/Contents/PlugIns/PostmarkMail.appex"
+	@codesign --force --sign - --entitlements PostmarkMail/PostmarkMail.entitlements \
+		"$(APP_BUNDLE)/Contents/PlugIns/PostmarkMail.appex"
 	@lipo "$(EXECUTABLE)" -verify_arch arm64 x86_64 || \
 		{ echo "❌ Expected universal binary, got: $$(lipo -archs "$(EXECUTABLE)")"; exit 1; }
 	@echo "Architectures: $$(lipo -archs "$(EXECUTABLE)")"
@@ -156,6 +162,11 @@ sign:
 	@mkdir -p "$(APP_BUNDLE)"
 	@cp -R "$(BUILD_DIR)/DerivedData/Build/Products/Release/$(BUNDLE_NAME).app/." "$(APP_BUNDLE)/"
 	@cp Postmark/Resources/PostmarkRules.json.template "$(APP_BUNDLE)/Contents/Resources/" 2>/dev/null || true
+	@bash scripts/build-mailkit-appex.sh "$(APP_BUNDLE)/Contents/PlugIns/PostmarkMail.appex"
+	@codesign --force --options runtime --timestamp --sign "$(SIGNING_IDENTITY)" \
+		--entitlements PostmarkMail/PostmarkMail.entitlements "$(APP_BUNDLE)/Contents/PlugIns/PostmarkMail.appex"
+	@codesign --force --options runtime --timestamp --sign "$(SIGNING_IDENTITY)" \
+		--entitlements Postmark/Entitlements/Postmark.entitlements "$(APP_BUNDLE)"
 	@codesign --verify --deep --strict "$(APP_BUNDLE)" && echo "✅ Signed + verified: $(APP_BUNDLE)"
 
 # Notarize (requires Apple Developer account + `make notary-login` once).
