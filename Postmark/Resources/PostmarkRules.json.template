@@ -3,14 +3,14 @@
   "comment": "Postmark rule file TEMPLATE. The real rule file lives at ~/Library/Application Support/Postmark/PostmarkRules.json (created on first launch by copying this template). Git only ships this .template — never the real file. The Silo inbound address placeholders below MUST be replaced (the app refuses to forward to a placeholder, see the runtime guard).",
   "version": 1,
   "polling": {
-    "intervalMinutes": 5,
+    "intervalMinutes": 30,
     "daysWindow": 7,
     "enabled": false,
     "quietHours": {
       "start": "22:00",
       "end": "08:00"
     },
-    "includeRead": false
+    "includeRead": true
   },
   "provider": {
     "type": "litellm",

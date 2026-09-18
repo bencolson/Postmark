@@ -60,7 +60,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         schedulePoll()
 
         // Fast path: MailKit signals from the PostmarkMail appex (when enabled).
-        // The 15-minute poll above stays the backstop.
+        // The scheduled poll above stays the backstop (when polling is enabled).
         let trigger = TriageTrigger(coordinator: triage)
         trigger.start()
         mailKitTrigger = trigger
@@ -272,6 +272,17 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     private func schedulePoll() {
         pollTimer?.invalidate()
+        pollTimer = nil
+
+        // Polling off means truly off: no scheduled runs at all. `Triage Now`
+        // (manual) is the only path that runs when `polling.enabled` is false,
+        // and it drops to shadow mode. The MailKit signal path is gated the
+        // same way in TriageTrigger.
+        guard settingsStore.triageEnabled else {
+            ActivityLog.shared.record("Polling disabled — no scheduled runs", kind: .app, level: .debug)
+            return
+        }
+
         let interval = TimeInterval(max(settingsStore.pollingIntervalMinutes, 1) * 60)
         let timer = Timer.scheduledTimer(withTimeInterval: interval, repeats: true) { [weak self] _ in
             Task { @MainActor in
@@ -283,7 +294,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                 self.refreshIcon()
             }
         }
-        ActivityLog.shared.record("Scheduled triage fired", kind: .app, level: .debug)
+        ActivityLog.shared.record("Scheduled triage to poll every \(settingsStore.pollingIntervalMinutes) min", kind: .app, level: .debug)
         RunLoop.main.add(timer, forMode: .common)
         pollTimer = timer
     }

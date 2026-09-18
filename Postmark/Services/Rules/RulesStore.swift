@@ -27,10 +27,11 @@ final class RulesStore {
         let rules = PostmarkRules(
             version: 1,
             polling: PollingConfig(
-                intervalMinutes: 15,
+                intervalMinutes: 30,
                 daysWindow: 3,
                 enabled: false,
-                quietHours: nil
+                quietHours: nil,
+                includeRead: true
             ),
             provider: ProviderSpec(
                 type: "litellm",

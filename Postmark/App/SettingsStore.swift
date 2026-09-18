@@ -89,7 +89,7 @@ final class SettingsStore: ObservableObject {
     }
 
     var pollingIntervalMinutes: Int {
-        RulesStore.shared.load()?.polling.intervalMinutes ?? 15
+        RulesStore.shared.load()?.polling.intervalMinutes ?? 30
     }
 
     var daysWindow: Int {

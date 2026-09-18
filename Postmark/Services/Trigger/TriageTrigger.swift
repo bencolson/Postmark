@@ -92,6 +92,14 @@ final class TriageTrigger {
     }
 
     private func scheduleRun() {
+        // Polling off means truly off: a MailKit signal must not start a
+        // (shadow) run either. Only manual "Triage Now" runs then, in shadow
+        // mode. Read live so a toggle is honoured on the next signal.
+        guard RulesStore.shared.load()?.polling.enabled == true else {
+            ActivityLog.shared.record("MailKit signal ignored — polling disabled", kind: .app, level: .debug)
+            return
+        }
+
         debounceTask?.cancel()
         debounceTask = Task { @MainActor [weak self] in
             guard let self else { return }

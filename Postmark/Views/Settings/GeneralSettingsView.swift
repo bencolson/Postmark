@@ -5,9 +5,9 @@ struct GeneralSettingsView: View {
     @EnvironmentObject var settingsStore: SettingsStore
     @EnvironmentObject var updateChecker: UpdateChecker
 
-    @State private var intervalMinutes: Int = 15
+    @State private var intervalMinutes: Int = 30
     @State private var daysWindow: Int = 7
-    @State private var includeRead: Bool = false
+    @State private var includeRead: Bool = true
     @State private var quietStart: String = "22:00"
     @State private var quietEnd: String = "08:00"
     @State private var saveState: SaveState = .idle
