@@ -178,6 +178,8 @@ None outstanding. Execution model is locked (background daemon + menu-bar config
 
 ## MailKit extension: RESOLVED 2026-09-17 (was blocked on macOS 26.6.2)
 
+Full root-cause write-up: [docs/mailkit-extension-root-cause.md](mailkit-extension-root-cause.md).
+
 The `PostmarkMail` appex crashed at ExtensionFoundation bootstrap
 (`EXConcreteExtensionContextVendor._extensionContextClass`, EXC_BREAKPOINT
 0x2329a66b8) on **Xcode-compiled** appexes — every build (Debug + Release,
