@@ -44,10 +44,6 @@ final class SiloForwarder {
 
         // Save every attachment of the message once; pick the eligible ones.
         let savedPaths = await saveAttachments(of: message, into: folder, outcome: &outcome)
-        guard !outcome.errors.contains(where: { $0.hasPrefix("saveAttachments") }) else {
-            try? FileManager.default.removeItem(at: folder)
-            return outcome
-        }
 
         var attachFiles: [(String, String)] = []
         for entry in eligible {
@@ -132,8 +128,9 @@ final class SiloForwarder {
         // Never send an empty shell. A receipt forward with zero attachments is
         // a useless body-only stub (the reported "no content / no attachments"
         // spam). Skip whenever nothing was saved to disk, regardless of whether
-        // the message reported attachments — saveAttachments can return empty
-        // even when it believed there were some.
+        // the message reported attachments — attachment data can fail to resolve
+        // even when the MIME source listed filenames, and a resolved-but-empty
+        // list must not produce a forward either.
         guard !attachFiles.isEmpty else {
             outcome.errors.append("0 attachment(s) saved on disk — receipt forward skipped, no empty message sent")
             await ActivityLog.shared.record(
@@ -171,27 +168,32 @@ final class SiloForwarder {
         return outcome
     }
 
-    /// Save every attachment of a message into `folder`; returns a map of
-    /// filename → saved path for the ones that landed on disk. Errors are
-    /// appended to `outcome.errors`.
+    /// Write every attachment's decoded bytes into `folder`; returns a map of
+    /// filename → saved path for the ones that landed on disk. Attachments
+    /// whose bytes were never resolved (missing data) append an error, which
+    /// preserves the skip-guard semantics in the callers: an unresolvable
+    /// attachment still prevents an empty forward.
     private func saveAttachments(of message: MailMessage, into folder: URL, outcome: inout Outcome) async -> [String: String] {
         var savedPaths: [String: String] = [:]
-        do {
-            let raw = try await MailBridge.executeAppleScript(MailScripts.saveAttachments(messageID: message.id, to: folder.path))
-            for line in raw.components(separatedBy: "\n") {
-                let parts = line.split(separator: ":", maxSplits: 2)
-                guard parts.count == 3 else { continue }
-                let name = String(parts[0])
-                let path = String(parts[2])
-                if FileManager.default.fileExists(atPath: path) {
-                    savedPaths[name] = path
-                }
+        for att in message.attachments {
+            guard let data = att.data, !data.isEmpty else {
+                outcome.errors.append("attachment data missing: \(att.name)")
+                continue
             }
-            await ActivityLog.shared.record("Saved \(savedPaths.count) attachment\(savedPaths.count == 1 ? "" : "s") for forward", kind: .silo, messageID: message.id)
-        } catch {
-            outcome.errors.append("saveAttachments: \(error.localizedDescription)")
-            await ActivityLog.shared.record("Attachment save failed: \(error.localizedDescription)", kind: .silo, level: .error, messageID: message.id)
+            let safeName = String(att.name.map { $0 == "/" || $0 == ":" || $0 == "\\" ? "_" : $0 })
+            guard !safeName.isEmpty else {
+                outcome.errors.append("attachment data missing: \(att.name)")
+                continue
+            }
+            let dest = folder.appendingPathComponent(safeName)
+            do {
+                try data.write(to: dest)
+                savedPaths[att.name] = dest.path
+            } catch {
+                outcome.errors.append("attachment write failed: \(att.name): \(error.localizedDescription)")
+            }
         }
+        await ActivityLog.shared.record("Saved \(savedPaths.count) attachment\(savedPaths.count == 1 ? "" : "s") for forward", kind: .silo, messageID: message.id)
         return savedPaths
     }
 }

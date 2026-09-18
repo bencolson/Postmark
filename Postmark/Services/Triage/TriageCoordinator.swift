@@ -103,6 +103,30 @@ final class TriageCoordinator {
             let rule = rules.rules.first { $0.id == category }
             let actionRule = rule ?? Rule(id: "fallback", label: "Fallback", action: rules.fallback.action)
 
+            // Resolve the real attachment list from the message's MIME source
+            // before the attachment pass. Mail's AppleScript attachment element
+            // errors -1728 for every message on macOS 26.6.2, so the poller's
+            // list is always empty; `source of m` + MIMEParser recovers it.
+            // A resolution failure is never silently skipped nor cooldown-marked:
+            // we cannot know whether a production doc exists, so retry next run.
+            if !message.attachmentsResolved {
+                do {
+                    message.attachments = try await MailBridge.resolveAttachments(for: message.id)
+                    message.attachmentsResolved = true
+                    ActivityLog.shared.record(
+                        "Resolved \(message.attachments.count) attachment(s) from MIME source",
+                        kind: .poll, level: .debug, messageID: message.id
+                    )
+                } catch {
+                    errors.append("\(message.subject): attachment resolution failed: \(error.localizedDescription)")
+                    ActivityLog.shared.record(
+                        "Attachment resolution failed (\(error.localizedDescription)) — not cooldown-marked: will retry",
+                        kind: .silo, level: .error, messageID: message.id
+                    )
+                    continue
+                }
+            }
+
             byCategory[actionRule.label, default: 0] += 1
             ActivityLog.shared.record(
                 "Classified: \(actionRule.label) (\(actionRule.id))",

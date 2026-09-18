@@ -179,19 +179,14 @@ enum MailScripts {
         """
     }
 
-    /// Save every attachment of a message into a temp folder; returns a newline-
-    /// separated list of `filename:size:destPath` triples.
-    ///
-    /// Like `markRead`, the message is looked up in the inbox first, then in
-    /// every mailbox of every account. This matters because the rule executor
-    /// moves a message *before* its forward runs, so by the time attachments are
-    /// saved the message is no longer in the inbox — an inbox-only lookup would
-    /// silently return nothing and the forward would go out empty.
-    static func saveAttachments(messageID: String, to folder: String) -> String {
-        """
-        set dest to "\(_escape(folder))"
-        set sep to ":"
-        set out to ""
+    /// Fetch the full raw RFC822 source of a message by Message-ID. Like
+    /// `markRead`, the message is looked up in the inbox first, then in every
+    /// mailbox of every account — a rule may have moved it before the forward
+    /// runs. `source` is what MIMEParser walks: Mail's `every attachment`
+    /// element errors -1728 for every message on macOS 26.6.2, so attachment
+    /// enumeration cannot be trusted.
+    static func messageSource(messageID: String) -> String {
+        return """
         set mid to "\(_escape(messageID))"
         tell application "Mail"
             set foundMsg to missing value
@@ -199,10 +194,10 @@ enum MailScripts {
                 set foundMsg to first message of inbox whose message id = mid
             end try
             if foundMsg is missing value then
-                repeat with acc in every account
-                    repeat with mbx in every mailbox of acc
+                repeat with a in every account
+                    repeat with mb in every mailbox of a
                         try
-                            set foundMsg to first message of mbx whose message id = mid
+                            set foundMsg to first message of mb whose message id = mid
                             exit repeat
                         end try
                     end repeat
@@ -213,22 +208,13 @@ enum MailScripts {
             end if
             if foundMsg is not missing value then
                 try
-                    set attList to every attachment of foundMsg
-                    repeat with a in attList
-                        set an to name of a
-                        set asz to size of a
-                        set ap to dest & "/" & an
-                        try
-                            save a in (POSIX file dest) as alias
-                        on error
-                            save a in (POSIX file dest)
-                        end try
-                        set out to out & an & sep & asz & sep & ap & return
-                    end repeat
+                    return (source of foundMsg) as string
+                on error
+                    return ""
                 end try
             end if
+            return ""
         end tell
-        return out
         """
     }
 

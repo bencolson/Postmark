@@ -66,6 +66,17 @@ final class MailBridge {
         }
     }
 
+    /// Fetch a message's full raw MIME source and recover its attachments from
+    /// it. Mail's AppleScript attachment element errors -1728 for every message
+    /// on macOS 26.6.2, so the poller's attachment list is always empty; `source
+    /// of m` returns the whole RFC822 message and MIMEParser walks it instead.
+    /// An empty source (message not found) yields no attachments.
+    static func resolveAttachments(for messageID: String) async throws -> [MailAttachment] {
+        let raw = try await executeAppleScript(MailScripts.messageSource(messageID: messageID))
+        guard !raw.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { return [] }
+        return MIMEParser.parse(source: raw)
+    }
+
     /// In-process Mail liveness probe — no AppleScript, no TCC automation to
     /// System Events. The old `tell application "System Events"` check
     /// intermittently failed with Apple Events errors ("Connection is invalid",
